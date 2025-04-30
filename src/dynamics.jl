@@ -88,7 +88,7 @@ function correct!(traj::FredkinPBCTrajectory, site::Int)
 end
 
 function correct!(traj::MotzkinTrajectory, site::Int)
-    L = Int(log(3,length(traj.state)))
+    L = Int(round(log(3,length(traj.state))))
     # correct the state
     if site < L-1
         traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
@@ -100,7 +100,7 @@ function correct!(traj::MotzkinTrajectory, site::Int)
 end
 
 function correct!(traj::MotzkinPBCTrajectory, site::Int)
-    L = Int(log(3,length(traj.state)))
+    L = Int(round(log(3,length(traj.state))))
     # correct the state
     traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
 end

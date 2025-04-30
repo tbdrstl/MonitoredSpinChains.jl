@@ -1,22 +1,22 @@
 using MonitoredSpinChains
 
+
 params = Dict(
         "name" => "test",
-        "systemSize" => [6],
+        "systemSize" => 4:2:20,
         "meas_steps" => [x->x^4],
-        "average" => [100],
-        "bc" => [:pbc],
-        "initialState" => [rand_spinone_im],
+        "average" => [1000],
+        "bc" => [:pbc,:obc],
+        "initialState" => [rand_spinhalf_im, rand_spinhalf_real],
         "measurement" => [true],
         "feedback" => [:Z],
-        "result_folder" => joinpath(@__DIR__, "..", "test/test_data"),
+        "result_folder" => "/scratch/doerstel/fredkin",
         "observables" => [:OP],
         "trajectories_averaged" => [true],
         "thermalizationSteps" => [x->0],
         "meas_every" => [x->1],
-        "local_spin" => [1],
+        "local_spin" => [0.5],
     )
-    mkpath(params["result_folder"])
     
     sim = create_simulation(params)
 

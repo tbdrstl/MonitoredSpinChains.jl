@@ -30,10 +30,10 @@ function total_projector(traj::Trajectory)
         dotprod = real(dot(traj.state, traj.projectors[site], traj.state))
         OP += dotprod
         OPvar += dotprod^2
-        # OP += traj.state' * (traj.projectors[site] * traj.state)
     end
     OP = OP / L
     OPvar = OPvar / L - OP^2
 
     return OP, OPvar
 end
+

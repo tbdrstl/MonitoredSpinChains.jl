@@ -58,10 +58,10 @@ struct Circuit
     L                       ::Int
     meas_steps              ::Int
     average                 ::Int
-    unitaryRate             ::A where A<:Real
+    # unitaryRate             ::A where A<:Real
+    # unitarySetup            ::Symbol
     bc                      ::Symbol
     initialState            ::Function
-    unitarySetup            ::Symbol
     measurement             ::Bool
     feedback                ::Symbol  
     result_folder           ::String

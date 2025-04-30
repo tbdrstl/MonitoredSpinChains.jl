@@ -33,6 +33,24 @@ function get_proj_motzkin_pbc(L::Int)
     return vcat(projectors, [pbc_proj])
 end
 
+function get_projectors(circuit::Circuit)
+    trajtype = determine_trajectory(circuit)
+    L = circuit.L
+
+    if trajtype == FredkinPBCTrajectory
+        projectors = get_proj_fredkin_pbc(L)
+    elseif trajtype == FredkinTrajectory
+        projectors = get_proj_fredkin(L)
+    elseif trajtype == MotzkinPBCTrajectory
+        projectors = get_proj_motzkin_pbc(L)
+    elseif trajtype == MotzkinTrajectory
+        projectors = get_proj_motzkin(L)
+    else
+        error("Unknown trajectory type.")
+    end
+    return projectors
+end
+
 function create_simulation(params::Dict; testmode::Bool=false)
     # test if all parameters are given
 
@@ -49,11 +67,11 @@ function create_simulation(params::Dict; testmode::Bool=false)
         end
     end
 
-    for unitarySetup in params["unitarySetup"]
-        if !(unitarySetup in legal_unitarySetups)
-            throw(ArgumentError("Unitary setup $unitarySetup is not a legal unitary setup."))
-        end
-    end
+    # for unitarySetup in params["unitarySetup"]
+    #     if !(unitarySetup in legal_unitarySetups)
+    #         throw(ArgumentError("Unitary setup $unitarySetup is not a legal unitary setup."))
+    #     end
+    # end
 
     for feedback in params["feedback"]
         if !(feedback in legal_feedbacks)
@@ -67,32 +85,34 @@ function create_simulation(params::Dict; testmode::Bool=false)
     for (_,systemSize) in enumerate(params["systemSize"]),
         (_,meas_steps) in enumerate(params["meas_steps"]),
         (_,average) in enumerate(params["average"]),
-        (_,unitaryRate) in enumerate(params["unitaryRate"]),
+        # (_,unitaryRate) in enumerate(params["unitaryRate"]),
+        # (_,unitarySetup) in enumerate(params["unitarySetup"]),
         (_,bc) in enumerate(params["bc"]),
         (_,initialState) in enumerate(params["initialState"]),
-        (_,unitarySetup) in enumerate(params["unitarySetup"]),
         (_,measurement) in enumerate(params["measurement"]),
         (_,feedback) in enumerate(params["feedback"]),
         (_,trajectories_averaged) in enumerate(params["trajectories_averaged"]),
         (_,thermalizationSteps) in enumerate(params["thermalizationSteps"]),
-        (_,meas_every) in enumerate(params["meas_every"])
+        (_,meas_every) in enumerate(params["meas_every"]),
+        (_,local_spin) in enumerate(params["local_spin"])
 
         
         push!(vector_of_circuits, LocalTimestep(
             systemSize,
             meas_steps(systemSize),
             average,
-            unitaryRate,
+            # unitaryRate,
+            # unitarySetup,
             bc,
             initialState,
-            unitarySetup,
             measurement,
             feedback,
             params["result_folder"],
             params["observables"],
             trajectories_averaged,
             thermalizationSteps(systemSize),
-            meas_every(systemSize)
+            meas_every(systemSize),
+            local_spin
         ))
     end
 

@@ -2,20 +2,19 @@ using MonitoredSpinChains
 
 params = Dict(
         "name" => "test",
-        "systemSize" => [8],
-        "meas_steps" => [x->1],
-        "average" => [1],
+        "systemSize" => [6],
+        "meas_steps" => [x->x^5],
+        "average" => [100],
         "bc" => [:pbc],
-        "initialState" => [ranrand_spinhalf_im],
+        "initialState" => [rand_spinhalf_im],
         "measurement" => [true],
         "feedback" => [:Z],
         "result_folder" => joinpath(@__DIR__, "..", "test/test_data"),
-        "observables" => [:AncillaMutualInformation],
+        "observables" => [:OP],
         "trajectories_averaged" => [true],
-        "thermalizationSteps" => [x->1, x->0],
+        "thermalizationSteps" => [x->0],
         "meas_every" => [x->1],
-        "steadyState" => false,
-        "local_spin" => [1],
+        "local_spin" => [0.5],
     )
     mkpath(params["result_folder"])
     

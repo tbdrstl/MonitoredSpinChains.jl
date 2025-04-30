@@ -44,7 +44,7 @@ upm = [1,0,0]
 flatm = [0,1,0]
 downm = [0,0,1]
 
-Xm = [0 1 0; 0 0 1; 1 0 0]
+Xm = [0 0 1; 0 1 0; 0 0 1]
 
 function proj(vec::AbstractVector{N}) where N <: Number
     return vec * vec'

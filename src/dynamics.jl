@@ -35,51 +35,32 @@ function thermalize!(traj::Trajectory)
 end
 
 function time_step!(traj::Trajectory) :: Trajectory
+    # unitarySteps = ceil(Int, traj.circuit.unitaryRate)
+    # unitaryTimeEvolProb = traj.circuit.unitaryRate / unitarySteps
 
-    unitarySteps = ceil(Int, traj.circuit.unitaryRate)
-    unitaryTimeEvolProb = traj.circuit.unitaryRate / unitarySteps
 
-
-    time_step!(traj.circuit, traj, unitaryTimeEvolProb, unitarySteps)
+    time_step!(traj.circuit, traj)#, unitaryTimeEvolProb, unitarySteps)
 end
 
-function time_step!(circuit::LocalTimestep, traj::Trajectory, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: Trajectory
+function time_step!(circuit::Circuit, traj::Trajectory)#, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: Trajectory
     @unpack L, measurement = circuit
-    # the actual time evolution
-
-    @show unitaryTimeEvolProb, unitarySteps
-    for _ in 1:L
-        for __ in 1:unitarySteps
-            if rand() < unitaryTimeEvolProb
-                random_unitary!(traj.state, circuit, rand(1:L), traj.projectors)
-            end
-        end
-
-        perturbInThisTimestep = traj.current_timestep <= length(traj.circuit.whenToPerturb) ? traj.circuit.whenToPerturb[traj.current_timestep] : false
-
-        if perturbInThisTimestep
-            apply_perturbation!(traj.state, circuit)
-        end
-
-        measurement && singlet_meas!(traj, rand(1:L))
-    end
-
+    measurement && meas!(traj, rand(1:L))
     return traj
 end
 
-function meas!(traj::Trajectory, projector::SparseArrays.SparseMatrixCSC{ComplexF64, Int64}, site::Int)
-    Ppsi = projector * traj.state
+function meas!(traj::Trajectory, site::Int)
+    Ppsi = traj.projectors[site] * traj.state
     prob = real(dot(traj.state, Ppsi))
     if rand()<prob
         sqrtProb = sqrt(prob)
         traj.state .= Ppsi/sqrtProb
 
-        correct!(state,site)
+        correct!(traj,site)
     else
         traj.state .= (traj.state - Ppsi)/sqrt(1.0-prob)
     end
 
-    return false
+    return 
 end
 
 function correct!(traj::FredkinTrajectory, site::Int)

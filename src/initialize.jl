@@ -97,7 +97,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
         (_,local_spin) in enumerate(params["local_spin"])
 
         
-        push!(vector_of_circuits, LocalTimestep(
+        push!(vector_of_circuits, Circuit(
             systemSize,
             meas_steps(systemSize),
             average,
@@ -144,7 +144,6 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
                                         current_timestep = current_timestep,
                                         thermalized = thermalized,
                                         observables = observables))
-
         if state
             trajectories[end].state = circuit.initialState(circuit.L)
         end
@@ -186,4 +185,32 @@ function determine_trajectory(circuit::Circuit)
     else
         error("Assertion of trajectory type failed.")
     end
+end
+
+function check_if_circuit_is_already_computed!(vector_of_circuits::Vector{Circuit}; testmode::Bool=false)
+    if testmode
+        return
+    end
+
+    indexlist = zeros(Int, length(vector_of_circuits))
+    for (i, circuit) in enumerate(vector_of_circuits)
+        if isfile(circuit_to_filename(circuit, 0; average=true))
+            indexlist[i] = i
+        end
+    end
+    filter!(!iszero, indexlist)
+    splice!(vector_of_circuits, indexlist)
+    return 
+end
+
+function compute_missing_parameters!(traj::Trajectory)
+    if ismissing(traj.projectors)
+        traj.projectors = get_projectors(traj.circuit)
+    end
+
+    if ismissing(traj.state)
+        traj.state = traj.circuit.initialState(traj.circuit.L)
+    end
+
+    return 
 end

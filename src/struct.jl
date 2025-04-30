@@ -1,57 +1,9 @@
-abstract type Circuit end
 abstract type Trajectory end
 abstract type SpinOneTrajectory <: Trajectory end
 abstract type SpinHalfTrajectory <: Trajectory end
 
 @kwdef mutable struct Observables
     total_proj        ::Union{Missing,Matrix{Float64}} = missing
-end
-
-struct Simulation
-    name            ::String
-    params          ::Vector{Circuit}
-    params_dict     ::Dict
-end
-
-@kwdef mutable struct FredkinTrajectory <: SpinHalfTrajectory
-    trajectoryID    ::Int64
-    circuit         ::Circuit
-    current_timestep::Int64
-    thermalized     ::Bool
-    observables     ::Union{Missing,Observables}
-    state           ::Union{Missing,AbstractVector{ComplexF64}}
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
-    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
-end
-
-@kwdef mutable struct FredkinPBCTrajectory <: SpinHalfTrajectory
-    trajectoryID    ::Int64
-    circuit         ::Circuit
-    current_timestep::Int64
-    thermalized     ::Bool
-    observables     ::Union{Missing,Observables}
-    state           ::Union{Missing,AbstractVector{ComplexF64}}
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
-    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
-end
-@kwdef mutable struct MotzkinTrajectory <: SpinOneTrajectory
-    trajectoryID    ::Int64
-    circuit         ::Circuit
-    current_timestep::Int64
-    thermalized     ::Bool
-    state           ::Union{Missing,AbstractVector{ComplexF64}}
-    observables     ::Union{Missing,Observables}
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
-end
-
-@kwdef mutable struct MotzkinPBCTrajectory <: SpinOneTrajectory
-    trajectoryID    ::Int64
-    circuit         ::Circuit
-    current_timestep::Int64
-    thermalized     ::Bool
-    state           ::Union{Missing,AbstractVector{ComplexF64}}
-    observables     ::Union{Missing,Observables}
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
 end
 
 struct Circuit 
@@ -70,6 +22,52 @@ struct Circuit
     thermalizationSteps     ::Int
     meas_every              ::Int
     local_spin              ::Float64
+end
+struct Simulation
+    name            ::String
+    params          ::Vector{Circuit}
+    params_dict     ::Dict
+end
+
+@kwdef mutable struct FredkinTrajectory <: SpinHalfTrajectory
+    trajectoryID    ::Int64
+    circuit         ::Circuit
+    current_timestep::Int64
+    thermalized     ::Bool
+    observables     ::Union{Missing,Observables} = missing
+    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
+    # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
+end
+
+@kwdef mutable struct FredkinPBCTrajectory <: SpinHalfTrajectory
+    trajectoryID    ::Int64
+    circuit         ::Circuit
+    current_timestep::Int64
+    thermalized     ::Bool
+    observables     ::Union{Missing,Observables} = missing
+    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
+    # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
+end
+@kwdef mutable struct MotzkinTrajectory <: SpinOneTrajectory
+    trajectoryID    ::Int64
+    circuit         ::Circuit
+    current_timestep::Int64
+    thermalized     ::Bool
+    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
+    observables     ::Union{Missing,Observables} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
+end
+
+@kwdef mutable struct MotzkinPBCTrajectory <: SpinOneTrajectory
+    trajectoryID    ::Int64
+    circuit         ::Circuit
+    current_timestep::Int64
+    thermalized     ::Bool
+    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
+    observables     ::Union{Missing,Observables} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
 end
 
 function add!(a::Observables,b::Observables) ::Observables

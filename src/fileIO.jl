@@ -1,0 +1,207 @@
+
+# save trajectory to file only every 10th timestep to avoid IO overhead
+function save_trajectory(traj::Trajectory)
+    if traj.current_timestep >= traj.circuit.meas_steps*traj.circuit.meas_every || traj.current_timestep % 30 == 0
+        file = trajectory_to_filename(traj)
+    
+        jldsave(file; traj.trajectoryID, traj.state, traj.observables, traj.current_timestep, circuit = traj.circuit)
+
+        jldopen(file,"w") do f
+            f["trajectoryID"] = traj.trajectoryID
+            f["state"] = traj.state
+            f["observables"] = traj.observables
+            f["current_timestep"] = traj.current_timestep
+            
+            # save circuit to group to save initial state as string. Never loaded again
+            circuit = JLD2.Group(f, "circuit")
+            for field in fieldnames(typeof(traj.circuit))
+                # Skip the `initialState` field
+                if field != :initialState
+                    # Save each field in the "circuit" group
+                    circuit[string(field)] = getfield(traj.circuit, field)
+                end
+            end
+            circuit["initialState"] = string(traj.circuit.initialState)
+        end
+    end
+end
+
+function load_existing_trajectory_data!(traj::Trajectory)
+    file = trajectory_to_filename(traj)
+
+    if isfile(file)
+        # remove file to ensure simulation continues (compute trajectory again)
+        f = try 
+            load(file)
+        catch 
+            rm(file)
+            return
+        end
+
+        traj.trajectoryID = f["trajectoryID"]
+        traj.state = f["state"]
+        traj.observables = f["observables"]
+        traj.current_timestep = f["current_timestep"]
+        # if file has been saved, state is already thermalized. Important to be able to continue computation from loaded file
+        traj.thermalized = true
+    end
+end
+
+# function remove_excess_data_specialized!(traj::Union{ZFeedbackTrajectory, ZFeedbackSteadyStateTrajectory})
+#     traj.zFeedbackIndices = missing
+# end
+
+# function remove_excess_data_specialized!(traj::Union{XYZFeedbackTrajectory, XYZFeedbackSteadyStateTrajectory})
+#     traj.zFeedbackIndices = missing
+#     traj.xFeedbackIndices = missing
+# end
+
+# julia always uses the most specialized function. Catch all other trajcetory cases here
+function remove_excess_data_specialized!(traj::Trajectory)
+    return
+end
+
+function remove_excess_data!(traj::Trajectory)
+    traj.state = missing
+    traj.projectors = missing
+    remove_excess_data_specialized!(traj)
+    save_trajectory(traj)
+    traj.observables = missing
+end
+
+
+
+function trajectory_to_filename(traj::Trajectory) ::String
+    to_hash = string(traj.trajectoryID)
+    to_hash *= string(hash(traj.circuit))
+    filename = string(hash(to_hash)) * ".jld2"
+    return joinpath(traj.circuit.result_folder, filename)
+end
+
+function circuit_to_filename(circuit::Circuit; average::Bool=false) ::String
+    filename = string(hash(circuit)) * ".jld2"
+
+    if average
+        return joinpath(circuit.result_folder, "average", filename)
+    else
+        return joinpath(circuit.result_folder, filename)
+    end
+end
+
+function circuit_to_filename(circuit::Circuit, trajID::Int64; average::Bool=false) ::String
+    filename = string(hash(circuit, trajID)) * ".jld2"
+
+    if average
+        return joinpath(circuit.result_folder, "average", filename)
+    else
+        return joinpath(circuit.result_folder, filename)
+    end
+end
+
+function collect_data(sim::Simulation)
+    if !isdir(joinpath(sim.params[1].result_folder, "average"))
+        mkdir(joinpath(sim.params[1].result_folder, "average"))
+    end
+
+    for circuit in sim.params
+        collect_data(circuit)
+        if circuit.trajectories_averaged == true
+            average_trajectories(circuit)
+        else
+            collect_data(circuit)
+        end
+        remove_single_trajectories(circuit) 
+    end
+end
+
+function collect_data(circuit::Circuit)
+    file = circuit_to_filename(circuit)
+
+    for trajID in 1:circuit.average
+        file1 = circuit_to_filename(circuit, trajID)
+        observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
+        jldopen(file,"a+") do f
+            f[file1] = observables
+        end
+    end
+end
+
+function save_parameter_file(params::Dict)
+    if !ispath(params["result_folder"])
+        mkpath(params["result_folder"])
+    end
+
+    param_filename = joinpath(params["result_folder"],"parameters.jld2")
+    fileIndex = 1
+
+    while isfile(param_filename)
+        param_filename = joinpath(params["result_folder"],"parameters$(fileIndex).jld2")
+        fileIndex+=1
+    end
+
+    jldsave(param_filename; params, packageVersion = get_package_version("MonitoredSpinChains"))
+
+    return 
+end
+
+function save_parameter_file(sim::Simulation)
+    save_parameter_file(sim.params_dict)
+end
+
+function average_trajectories(circuit::Circuit)
+
+    file1 = circuit_to_filename(circuit, 1)
+    
+    observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
+    for trajID in 2:circuit.average
+        file = circuit_to_filename(circuit, trajID)
+        if isfile(file)
+            add!(observables, load(file, "observables"))
+        else
+            println(circuit)
+            println(trajID)
+            println(file)
+            throw(ArgumentError("No data for circuit $file"))
+        end
+    end
+    divide!(observables, circuit.average)
+
+    jldsave(circuit_to_filename(circuit, 0; average=true); observables, circuit)
+
+    return
+end
+
+function get_package_version(str::String)
+    deps = dependencies()
+    for (uuid, pkg) in deps
+        if pkg.name == str
+            return pkg.version
+        end
+    end
+    return "Package not found"
+end
+
+function get_package_version()
+    deps = dependencies()
+    for (uuid, pkg) in deps
+        if pkg.name == "MonitoredSpinChains"
+            return pkg.version
+        end
+    end
+    return "Package not found"
+end
+
+function remove_single_trajectories(circ::Circuit)
+    for trajID in 1:circ.average
+        file = circuit_to_filename(circ, trajID)
+        if isfile(file)
+            rm(file)
+        end
+    end
+end
+
+function remove_single_trajectories(sim::Simulation)
+    for circuit in sim.params
+        remove_single_trajectories(circuit)
+    end
+end

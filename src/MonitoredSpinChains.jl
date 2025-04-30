@@ -4,9 +4,26 @@ module MonitoredSpinChains
     using SparseArrays
     using JLD2
     using LuxurySparse: IMatrix
+    using UnPack
+    using MPI
+    import ProgressMeter: @showprogress
+    import Base: hash
+    import Pkg: dependencies
+    import Random: randperm
 
-    export  create_simulation,
-            simulate
+    export  Simulation,
+            Circuit,
+            SpinHalfTrajectory,
+            SpinOneTrajectory,
+            FredkinTrajectory,
+            FredkinPBCTrajectory,
+            MotzkinTrajectory,
+            MotzkinPBCTrajectory,
+            create_simulation,
+            simulate,
+            get_trajectories_from_simulation,
+            get_trajectories_from_circuit,
+            get_projectors
 
     include("struct.jl")
     include("constants.jl")
@@ -15,5 +32,6 @@ module MonitoredSpinChains
     include("dynamics.jl")
     include("initialize.jl")
     include("initialStates.jl")
-    
+    include("fileIO.jl")
+
 end

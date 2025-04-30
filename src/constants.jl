@@ -1,3 +1,23 @@
+export  X, 
+        Y, 
+        Z, 
+        up, 
+        down, 
+        plus, 
+        minus, 
+        hadamard,
+        SWAP,
+        CNOT,
+        Projector,
+        singlet,
+        fredkin,
+        motzkin,
+        sz,
+        upm,
+        flatm,
+        downm,
+        Xm
+
 
 ⊗(A,B) = kron(A,B)
 speye(n::Int64) = IMatrix(n)
@@ -37,3 +57,20 @@ const motzkin = U + D + F |> SparseMatrixCSC{ComplexF64, Int64}
 
 # const sz = Diagonal([1,-1,1]) |> SparseMatrixCSC{ComplexF64, Int64}
 const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
+
+const legal_observables = [:OP]
+const legal_feedbacks = [:Id, :Z]
+const required_params = [   "name", 
+                            "systemSize", 
+                            "meas_steps", 
+                            "average", 
+                            "bc", 
+                            "initialState", 
+                            "measurement", 
+                            "feedback", 
+                            "result_folder", 
+                            "observables", 
+                            "trajectories_averaged", 
+                            "thermalizationSteps", 
+                            "meas_every",
+                            "local_spin"]

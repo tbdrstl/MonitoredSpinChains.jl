@@ -4,6 +4,7 @@ abstract type SpinHalfTrajectory <: Trajectory end
 
 @kwdef mutable struct Observables
     total_proj        ::Union{Missing,Matrix{Float64}} = missing
+    entanglement_entropy::Union{Missing,Vector{Float64}} = missing
 end
 
 struct Circuit 

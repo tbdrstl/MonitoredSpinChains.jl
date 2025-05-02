@@ -7,6 +7,7 @@ function get_observables!(traj::Trajectory)
 
     for obs in traj.circuit.observables
         obs == :OP && (traj.observables.total_proj[current_meas_step, :] .= total_projector(traj))
+        obs == :EE && (traj.observables.entanglement_entropy[current_meas_step] = entanglement_entropy_general(traj,1:div(traj.circuit.L,2)))
     end
 
     return
@@ -16,6 +17,7 @@ function get_observables(circuit::Circuit)::Observables
     observables = Observables()
     for obs in circuit.observables
         obs == :OP && (observables.total_proj = zeros(circuit.meas_steps, 2))
+        obs == :EE && (observables.entanglement_entropy = zeros(circuit.meas_steps))
     end
     return observables
 end
@@ -37,3 +39,44 @@ function total_projector(traj::Trajectory)
     return OP, OPvar
 end
 
+function entanglement_entropy_general(traj::SpinHalfTrajectory, A::AbstractVector{Int})
+    return entanglement_entropy_general(traj.state, A)
+end
+
+function entanglement_entropy_general(psi::Vector{ComplexF64}, A::AbstractVector{Int})
+    # Calculate the number of qubits in the system
+    n = Int(log2(length(psi)))
+    if length(A) < 0 || length(A) > n
+        error("Partition A must have at least one qubit and cannot include all qubits.")
+    end
+    if any(x -> x < 1 || x > n, A)
+        error("Partition indices must be between 1 and the total number of qubits.")
+    end
+    
+    # Determine the complement of A (set B)
+    B = setdiff(1:n, A)
+    
+    # Create a permutation to reorder the qubits such that A comes first, then B
+    perm = vcat(A, B)
+    
+    # Reshape psi into an n-dimensional tensor with each dimension of size 2
+    reshaped_psi = reshape(psi, ntuple(_ -> 2, n))
+
+
+    
+    # Permute the dimensions according to the calculated permutation
+    permuted_psi = permutedims(reshaped_psi, perm)
+    
+    # Reshape the permuted state back into a matrix of size (2^length(A)) x (2^length(B))
+    reshaped_permuted_psi = reshape(permuted_psi, 2^length(A), 2^length(B))
+    
+    # Perform Singular Value Decomposition (SVD)
+    s = svdvals!(reshaped_permuted_psi)
+    
+    # Compute the entanglement entropy
+    probabilities = s.^2
+    non_zero_probs = probabilities[probabilities .> 0]
+    entropy = -sum(non_zero_probs .* log.(non_zero_probs))
+    
+    return entropy
+end

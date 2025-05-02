@@ -1,6 +1,6 @@
 name = "MonitoredSpinChains"
 uuid = "3dd0d50f-2b6a-4c40-8fcf-6320226936db"
-authors = ["Tobias Dörstel <tobias.doerstel@gmail.com>"]
+authors = ["Tobias Doerstel <tobias.doerstel@gmail.com>"]
 version = "1.0.0-DEV"
 
 [deps]

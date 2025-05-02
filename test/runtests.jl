@@ -3,7 +3,7 @@ import MonitoredSpinChains: mpiexec
 
 nworker = 5
 
-p = run(`$(mpiexec()) -n $nworker $(Base.julia_cmd()) fs1.jl`)
+p = run(`$(mpiexec()) -n $nworker $(Base.julia_cmd()) full_sim.jl`)
 
 
 # include("full_sim.jl")

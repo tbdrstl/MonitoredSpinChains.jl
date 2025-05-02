@@ -3,17 +3,17 @@ using MonitoredSpinChains
 
 params = Dict(
         "name" => "test",
-        "systemSize" => 4:2:20,
-        "meas_steps" => [x->x^4],
+        "systemSize" => [4],
+        "meas_steps" => [x->1],
         "average" => [1000],
         "bc" => [:pbc,:obc],
         "initialState" => [rand_spinhalf_im, rand_spinhalf_real],
         "measurement" => [true],
         "feedback" => [:Z],
         "result_folder" => "/scratch/doerstel/fredkin",
-        "observables" => [:OP],
+        "observables" => [:OP,:EE],
         "trajectories_averaged" => [true],
-        "thermalizationSteps" => [x->0],
+        "thermalizationSteps" => [x->x^3],
         "meas_every" => [x->1],
         "local_spin" => [0.5],
     )

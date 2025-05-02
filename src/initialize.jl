@@ -203,7 +203,7 @@ function check_if_circuit_is_already_computed!(vector_of_circuits::Vector{Circui
     return 
 end
 
-function compute_missing_parameters!(traj::Trajectory)
+function compute_missing_parameters!(traj::SpinOneTrajectory)
     if ismissing(traj.projectors)
         traj.projectors = get_projectors(traj.circuit)
     end
@@ -213,4 +213,48 @@ function compute_missing_parameters!(traj::Trajectory)
     end
 
     return 
+end
+
+function compute_missing_parameters!(traj::SpinHalfTrajectory)
+    if ismissing(traj.projectors)
+        traj.projectors = get_projectors(traj.circuit)
+    end
+
+    if ismissing(traj.state)
+        traj.state = traj.circuit.initialState(traj.circuit.L)
+    end
+
+    if ismissing(traj.zFeedbackIndices)
+        traj.zFeedbackIndices = feedbackIndices(traj.circuit)
+    end
+
+    return 
+end
+
+function swapEntries!(x::AbstractVector{ComplexF64},i::Int,j::Int)
+    idata = x[i]
+    x[i] = x[j]
+    x[j] = idata
+end
+
+function timesMinusOne!(a::AbstractVector{ComplexF64}, ind::Vector{I}) where I <: Integer
+    a[ind] .*= -1.0
+    # @fastmath @inbounds @simd for i in ind
+    #     a[i] = -a[i]
+    # end
+end
+
+function feedbackIndices(circuit::Circuit)::Vector{Vector{Int32}}
+    @unpack L = circuit 
+    feedbackIndices = Vector{Vector{Int32}}(undef, L)
+    for site in eachindex(1:L)
+        onesDiagonal = diag(speye(2^(site-1)) ⊗ Int32.([1 0; 0 -1]) ⊗ speye(2^(L-site)))
+        
+        if :AncillaMutualInformation in circuit.observables
+            onesDiagonal = diag(onesDiagonal ⊗ speye(4))
+        end
+        
+        feedbackIndices[site] = findall(!isone, onesDiagonal)
+    end
+    return feedbackIndices
 end

@@ -67,7 +67,7 @@ function correct!(traj::FredkinTrajectory, site::Int)
     L = Int(log2(length(traj.state)))
     # correct the state
     if site < L-1
-        traj.state .= (speye(2^(site-1)) ⊗ Z ⊗ speye(2^(L-site))) * traj.state
+        controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
     elseif site == L-1
         traj.state .= (X ⊗ speye(2^(L-1))) * traj.state
     elseif site == L
@@ -82,7 +82,7 @@ function correct!(traj::FredkinPBCTrajectory, site::Int)
     L = Int(log2(length(traj.state)))
     # correct the state
     site = mod1(site+1, L)
-    traj.state .= (speye(2^(site-1)) ⊗ Z ⊗ speye(2^(L-site))) * traj.state
+    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
 
     return 
 end
@@ -103,4 +103,8 @@ function correct!(traj::MotzkinPBCTrajectory, site::Int)
     L = Int(round(log(3,length(traj.state))))
     # correct the state
     traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
+end
+
+function controlPsiZ!(state::AbstractVector{ComplexF64}, feedbackIndices::Vector{I}) where I<:Integer
+    timesMinusOne!(state, feedbackIndices)
 end

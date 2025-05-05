@@ -39,6 +39,7 @@ const singlet        ::SparseVector{Float64, Int64}               = sparse([0.,1
 # Fredkin gate is a controlled swap gate
 const fredkin       ::SparseMatrixCSC{ComplexF64, Int64}         = (up*up') ⊗ Projector + Projector ⊗ (down*down')
 
+
 # implementation of Motzkin spin gate
 upm = [1,0,0]
 flatm = [0,1,0]
@@ -58,7 +59,7 @@ const motzkin = U + D + F |> SparseMatrixCSC{ComplexF64, Int64}
 # const sz = Diagonal([1,-1,1]) |> SparseMatrixCSC{ComplexF64, Int64}
 const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
 
-const legal_observables = [:OP, :EE]
+const legal_observables = [:OP, :EE, :M]
 const legal_feedbacks = [:Id, :Z]
 const required_params = [   "name", 
                             "systemSize", 

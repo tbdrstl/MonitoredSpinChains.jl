@@ -79,9 +79,8 @@ function correct!(traj::FredkinTrajectory, site::Int)
 end
 
 function correct!(traj::FredkinPBCTrajectory, site::Int)
-    L = Int(log2(length(traj.state)))
     # correct the state
-    site = mod1(site+1, L)
+    site = mod1(site+1, traj.circuit.L)
     controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
 
     return 

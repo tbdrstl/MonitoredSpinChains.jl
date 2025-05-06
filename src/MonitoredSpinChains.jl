@@ -6,6 +6,7 @@ module MonitoredSpinChains
     using LuxurySparse: IMatrix
     using UnPack
     using MPI
+    import Combinatorics: combinations
     import ProgressMeter: @showprogress
     import Base: hash
     import Pkg: dependencies

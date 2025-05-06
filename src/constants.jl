@@ -75,3 +75,5 @@ const required_params = [   "name",
                             "thermalizationSteps", 
                             "meas_every",
                             "local_spin"]
+
+const anomalousstatepath = joinpath(homedir(),".julia/data/fredkin_pbc_anomalous_ground_states")

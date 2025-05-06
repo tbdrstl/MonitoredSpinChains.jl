@@ -45,7 +45,7 @@ function entanglement_entropy_general(traj::SpinHalfTrajectory, A::AbstractVecto
     return entanglement_entropy_general(traj.state, A)
 end
 
-function entanglement_entropy_general(psi::Vector{ComplexF64}, A::AbstractVector{Int})
+function entanglement_entropy_general(psi::AbstractVector{T}, A::AbstractVector{Int}) where {T <: Union{Float64, ComplexF64}}
     # Calculate the number of qubits in the system
     n = Int(log2(length(psi)))
     if length(A) < 0 || length(A) > n

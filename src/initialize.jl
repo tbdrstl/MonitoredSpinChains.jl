@@ -1,3 +1,5 @@
+export compute_anomalous_groundstates
+
 
 function get_proj_fredkin(L::Int)
     projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
@@ -152,6 +154,10 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
             trajectories[end].projectors = get_projectors(circuit)
         end
 
+        if feedbackIdx
+            trajectories[end].zFeedbackIndices = feedbackIndices(circuit)
+        end
+
     end
     return trajectories
 end
@@ -257,4 +263,18 @@ function feedbackIndices(circuit::Circuit)::Vector{Vector{Int32}}
         feedbackIndices[site] = findall(!isone, onesDiagonal)
     end
     return feedbackIndices
+end
+
+function compute_anomalous_groundstates(;L_min=4, L_max=20)
+    if !ispath(anomalousstatepath)
+        mkpath(anomalousstatepath)
+    end
+    for L in L_min:L_max
+        if iseven(L)
+            if !isfile(joinpath(anomalousstatepath,"anomalousGS$L.bin"))
+                write(joinpath(anomalousstatepath,"anomalousGS$L.bin"), anomalous_ground_state(L))
+                println("L = $L done")
+            end
+        end
+    end
 end

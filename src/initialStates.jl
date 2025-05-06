@@ -7,7 +7,7 @@ export rand_spinhalf_im,
 
 
 function rand_spinhalf_im(L::Int)
-    psi = randn(Complex64,2^L) 
+    psi = randn(ComplexF64,2^L) 
     return psi ./ norm(psi)
 end
 

@@ -2,7 +2,8 @@ export rand_spinhalf_im,
         rand_spinone_im,
         rand_spinhalf_real,
         rand_spinone_real,
-        neelState
+        neelState,
+        anomalous_ground_state
 
 
 function rand_spinhalf_im(L::Int)

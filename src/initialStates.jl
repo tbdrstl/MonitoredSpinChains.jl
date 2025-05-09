@@ -18,15 +18,15 @@ end
 
 function rand_spinhalf_real(L::Int)
     psi = randn(Float64,2^L) 
-    return psi ./ norm(psi) |> Vector{ComplexF64}
+    return psi ./ norm(psi)
 end
 
 function rand_spinone_real(L::Int)
     psi = randn(Float64,3^L)
-    return psi ./ norm(psi) |> Vector{ComplexF64}
+    return psi ./ norm(psi)
 end
 
-function neelState(L::Int64) :: AbstractVector{ComplexF64}
+function neelState(L::Int64) :: AbstractVector{Float64}
     L == 0 && return [one(ComplexF64)]
     psi = down 
     
@@ -38,7 +38,7 @@ function neelState(L::Int64) :: AbstractVector{ComplexF64}
         end
     end
 
-    return psi |> Vector{ComplexF64}
+    return psi
 end
 
 function anomalous_ground_state(L::Int)
@@ -114,7 +114,7 @@ function state_bits_to_vector(state_bits::Vector{Int})
     return res
 end
 
-function load_anomalous(L::Int) :: AbstractVector{ComplexF64}
+function load_anomalous(L::Int) ::AbstractVector{Float64}
     psi = Vector{Float64}(undef, 2^L)
     open(joinpath(anomalousstatepath,"anomalousGS$L.bin")) do file
         read!(file, psi)

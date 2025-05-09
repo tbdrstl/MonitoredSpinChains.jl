@@ -6,6 +6,7 @@ abstract type SpinHalfTrajectory <: Trajectory end
     total_proj        ::Union{Missing,Matrix{Float64}} = missing
     entanglement_entropy::Union{Missing,Vector{Float64}} = missing
     magnetization     ::Union{Missing,Matrix{Float64}} = missing
+    magnetizationX    ::Union{Missing,Matrix{Float64}} = missing
 end
 
 struct Circuit 
@@ -37,8 +38,8 @@ end
     current_timestep::Int64
     thermalized     ::Bool
     observables     ::Union{Missing,Observables} = missing
-    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
+    state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
     zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
@@ -48,8 +49,8 @@ end
     current_timestep::Int64
     thermalized     ::Bool
     observables     ::Union{Missing,Observables} = missing
-    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
+    state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
     zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 @kwdef mutable struct MotzkinTrajectory <: SpinOneTrajectory
@@ -57,7 +58,7 @@ end
     circuit         ::Circuit
     current_timestep::Int64
     thermalized     ::Bool
-    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
+    state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
     observables     ::Union{Missing,Observables} = missing
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
 end
@@ -67,7 +68,7 @@ end
     circuit         ::Circuit
     current_timestep::Int64
     thermalized     ::Bool
-    state           ::Union{Missing,AbstractVector{ComplexF64}} = missing
+    state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
     observables     ::Union{Missing,Observables} = missing
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
 end

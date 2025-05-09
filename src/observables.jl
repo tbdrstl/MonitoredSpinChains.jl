@@ -9,6 +9,7 @@ function get_observables!(traj::Trajectory)
         obs == :OP && (traj.observables.total_proj[current_meas_step, :] .= total_projector(traj))
         obs == :EE && (traj.observables.entanglement_entropy[current_meas_step] = entanglement_entropy_general(traj,1:div(traj.circuit.L,2)))
         obs == :M && (traj.observables.magnetization[current_meas_step, :] .= magnetization(traj))
+        obs == :MX && (traj.observables.magnetizationX[current_meas_step, :] .= magnetizationX(traj))
     end
 
     return
@@ -20,6 +21,7 @@ function get_observables(circuit::Circuit)::Observables
         obs == :OP && (observables.total_proj = zeros(circuit.meas_steps, 2))
         obs == :EE && (observables.entanglement_entropy = zeros(circuit.meas_steps))
         obs == :M && (observables.magnetization = zeros(circuit.meas_steps, 2))
+        obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
     end
     return observables
 end
@@ -83,7 +85,7 @@ function entanglement_entropy_general(psi::AbstractVector{T}, A::AbstractVector{
     return entropy
 end
 
-function entanglement_entropy_general_spinOne(psi::Vector{ComplexF64}, A::AbstractVector{Int})
+function entanglement_entropy_general_spinOne(psi::AbstractVector{T}, A::AbstractVector{Int}) where {T<:Union{Float64, ComplexF64}}
     # Calculate the number of qubits in the system
     n = Int(round(log(3,length(psi))))
     if length(A) < 0 || length(A) > n
@@ -130,7 +132,24 @@ function magnetization(traj::SpinHalfTrajectory)
 
     @fastmath @inbounds for site in 1:L
         m = 0.5*dot(traj.state, speye(2^(site - 1)) ⊗ Z ⊗ speye(2^(L - site)), traj.state)
-        # m = state' * (speye(2^(site-1)) ⊗ Z ⊗ speye(2^(L-site)) * state)
+        
+        M += m
+        varM += m^2
+    end
+    M = real(M) / L
+    varM = real(varM) / L - M^2
+
+    return M, varM
+end
+
+function magnetizationX(traj::SpinHalfTrajectory)
+    @unpack L = traj.circuit
+
+    M = 0.0
+    varM = 0.0
+
+    @fastmath @inbounds for site in 1:L
+        m = 0.5*dot(traj.state, speye(2^(site - 1)) ⊗ X ⊗ speye(2^(L - site)), traj.state)
 
         M += m
         varM += m^2
@@ -151,4 +170,40 @@ function exact_dicke_entanglement(L::Int,mag::Int,subsystemSize::Int)
 		ent -= binom_i * log(binom_i/L_over_mag)
 	end
 	return ent/L_over_mag
+end
+
+# according to arXiv:1904.05205
+function exact_dyck_entanglement(L::Int, la::Int)
+    p(n) = 1 - mod(n,2) # selects even n
+
+    # number of valid Dyck paths between heights h1 and h2 with n steps
+    function D(n,h1,h2)
+        return (binomial(n, div(n+abs(h1-h2),2)) - binomial(n, div(n+h1+h2,2) + 1)) * p(n+h1+h2)
+    end
+
+    ent = 0.0
+    for h in 0:min(L-la, la)
+        Dquot = D(la,0,h)*D(L-la,h,0) / D(L, 0,0)
+        if Dquot == 0
+            continue
+        end
+        ent -= Dquot * log(Dquot)
+    end
+
+    return ent
+end
+
+function anomalous_ent(L::Int)
+    psi = load_anomalous(L)
+    ent = entanglement_entropy_general(psi, 1:div(L,2))
+    return ent
+end
+
+function anomalous_ent(A::AbstractVector{Int})
+    ents = zeros(length(A))
+    for (ind,l) in enumerate(A)
+        psi = load_anomalous(l)
+        ents[ind] = entanglement_entropy_general(psi, 1:div(l,2))
+    end   
+    return ents
 end

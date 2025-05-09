@@ -3,6 +3,7 @@ function run_trajectory!(traj::Trajectory)
 
     load_existing_trajectory_data!(traj)
     compute_missing_parameters!(traj)
+    @show typeof(traj.projectors) , typeof(traj.state)
     time_evolve!(traj)
     remove_excess_data!(traj)
     # GC.gc(true)
@@ -104,6 +105,6 @@ function correct!(traj::MotzkinPBCTrajectory, site::Int)
     traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
 end
 
-function controlPsiZ!(state::AbstractVector{ComplexF64}, feedbackIndices::Vector{I}) where I<:Integer
+function controlPsiZ!(state::AbstractVector{T}, feedbackIndices::Vector{I}) where {I<:Integer, T<:Union{Float64, ComplexF64}}
     timesMinusOne!(state, feedbackIndices)
 end

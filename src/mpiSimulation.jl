@@ -78,7 +78,8 @@ function simulate(sim::Simulation)
     MPI.Barrier(comm)
     
     if rank == root
-        collect_data(sim)
+        println("Collecting data...")
+        @time collect_data(sim)
         println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
     end
     

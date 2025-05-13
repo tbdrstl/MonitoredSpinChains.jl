@@ -11,10 +11,10 @@ end
 function get_proj_fredkin_pbc(L::Int)
     projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
     
-    pbc_proj = (speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25
+    pbc_proj = (speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25 
     
-    site_Lminus1 = pbc_proj * (speye(2^(L-2)) ⊗ proj(up) ⊗ speye(2)) + proj(down) ⊗ speye(2^(L-3)) ⊗ Projector
-    site_L = Projector ⊗ speye(2^(L-3)) ⊗ proj(up) + pbc_proj * (speye(2) ⊗ proj(down) ⊗ speye(2^(L-2)))
+    site_Lminus1 = pbc_proj * (speye(2^(L-2)) ⊗ proj(up) ⊗ speye(2)) + proj(down) ⊗ speye(2^(L-3)) ⊗ Projector |> SparseMatrixCSC{Float64, Int64}
+    site_L = Projector ⊗ speye(2^(L-3)) ⊗ proj(up) + pbc_proj * (speye(2) ⊗ proj(down) ⊗ speye(2^(L-2))) |> SparseMatrixCSC{Float64, Int64}
     return vcat(projectors, [site_Lminus1, site_L])
 end
 
@@ -29,7 +29,7 @@ function get_proj_motzkin_pbc(L::Int)
     projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
     
     pbc_proj = 0.5 * (proj(upm⊗spzeros(3^(L-2))⊗flatm - flatm⊗spzeros(3^(L-2))⊗upm)
-    + proj(downm⊗spzeros(3^(L-2))⊗flatm - (flatm |> Vector{ComplexF64})⊗spzeros(3^(L-2))⊗downm)
+    + proj(downm⊗spzeros(3^(L-2))⊗flatm - flatm⊗spzeros(3^(L-2))⊗downm)
     + proj(upm⊗spzeros(3^(L-2))⊗downm - flatm⊗spzeros(3^(L-2))⊗flatm))
     
     return vcat(projectors, [pbc_proj])
@@ -237,13 +237,13 @@ function compute_missing_parameters!(traj::SpinHalfTrajectory)
     return 
 end
 
-function swapEntries!(x::AbstractVector{ComplexF64},i::Int,j::Int)
+function swapEntries!(x::AbstractVector{T},i::Int,j::Int) where {T <: Union{Float64, ComplexF64}}
     idata = x[i]
     x[i] = x[j]
     x[j] = idata
 end
 
-function timesMinusOne!(a::AbstractVector{ComplexF64}, ind::Vector{I}) where I <: Integer
+function timesMinusOne!(a::AbstractVector{T}, ind::Vector{I}) where {I <: Integer, T <: Union{Float64, ComplexF64}}
     a[ind] .*= -1.0
     # @fastmath @inbounds @simd for i in ind
     #     a[i] = -a[i]

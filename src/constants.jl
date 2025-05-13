@@ -24,7 +24,7 @@ speye(n::Int64) = IMatrix(n)
 
 const X              ::SparseMatrixCSC{Float64, Int64}         = sparse([0. 1.; 1. 0.])
 const Y              ::SparseMatrixCSC{ComplexF64, Int64}         = sparse([0. im; -im 0.])
-const Z              ::SparseMatrixCSC{ComplexF64, Int64}         = sparse([1. 0.; 0. -1.])
+const Z              ::SparseMatrixCSC{Float64, Int64}         = sparse([1. 0.; 0. -1.])
 const up             ::SparseVector{Float64, Int64}               = sparse([1., 0.])
 const down           ::SparseVector{Float64, Int64}               = sparse([0., 1.])
 const plus           ::SparseVector{Float64, Int64}               = sparse([1., 1.])/sqrt(2.)
@@ -33,11 +33,11 @@ const hadamard       ::AbstractMatrix{Float64}                    = [1. 1.; 1. -
 const SWAP           ::AbstractMatrix{Float64}                    = sparse([1. 0. 0. 0.; 0. 0. 1. 0.; 0. 1. 0. 0.; 0. 0. 0. 1.])
 const CNOT           ::AbstractMatrix{Float64}                    = sparse([1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 0. 1.; 0. 0. 1. 0.])
 const PauliMatricies ::Vector{SparseMatrixCSC{ComplexF64, Int64}} = [X,Y,Z]
-const Projector      ::SparseMatrixCSC{ComplexF64, Int64}         = 0.25 * (speye(4) - X⊗X - Y⊗Y - Z⊗Z)
+const Projector      ::SparseMatrixCSC{Float64, Int64}         = 0.25 * (speye(4) - X⊗X - Y⊗Y - Z⊗Z) |> SparseMatrixCSC{Float64, Int64}
 const singlet        ::SparseVector{Float64, Int64}               = sparse([0.,1.,-1.,0.]) ./sqrt(2.)
 # implementation of Fredkin gate
 # Fredkin gate is a controlled swap gate
-const fredkin       ::SparseMatrixCSC{ComplexF64, Int64}         = (up*up') ⊗ Projector + Projector ⊗ (down*down')
+const fredkin       ::SparseMatrixCSC{Float64, Int64}         = (up*up') ⊗ Projector + Projector ⊗ (down*down') |> SparseMatrixCSC{Float64, Int64}
 
 
 # implementation of Motzkin spin gate
@@ -59,7 +59,7 @@ const motzkin = U + D + F |> SparseMatrixCSC{ComplexF64, Int64}
 # const sz = Diagonal([1,-1,1]) |> SparseMatrixCSC{ComplexF64, Int64}
 const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
 
-const legal_observables = [:OP, :EE, :M]
+const legal_observables = [:OP, :EE, :M, :MX]
 const legal_feedbacks = [:Id, :Z]
 const required_params = [   "name", 
                             "systemSize", 

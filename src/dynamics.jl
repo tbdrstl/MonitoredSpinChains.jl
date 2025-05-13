@@ -104,6 +104,6 @@ function correct!(traj::MotzkinPBCTrajectory, site::Int)
     traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
 end
 
-function controlPsiZ!(state::AbstractVector{ComplexF64}, feedbackIndices::Vector{I}) where I<:Integer
+function controlPsiZ!(state::AbstractVector{T}, feedbackIndices::Vector{I}) where {I<:Integer, T<:Union{Float64, ComplexF64}}
     timesMinusOne!(state, feedbackIndices)
 end

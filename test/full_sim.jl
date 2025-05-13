@@ -2,17 +2,17 @@ using MonitoredSpinChains
 
 params = Dict(
         "name" => "test",
-        "systemSize" => [6],
-        "meas_steps" => [x->1],
-        "average" => [10],
+        "systemSize" => [12],
+        "meas_steps" => [x->div(x^3,2)],
+        "average" => [1000],
         "bc" => [:pbc],
         "initialState" => [rand_spinhalf_im],
         "measurement" => [true],
         "feedback" => [:Z],
         "result_folder" => joinpath(@__DIR__, "..", "test/test_data"),
-        "observables" => [:OP,:EE,:M],
+        "observables" => [:OP],
         "trajectories_averaged" => [true],
-        "thermalizationSteps" => [x->x^3],
+        "thermalizationSteps" => [x->0],
         "meas_every" => [x->1],
         "local_spin" => [0.5],
     )

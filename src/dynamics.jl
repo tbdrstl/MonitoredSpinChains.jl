@@ -3,7 +3,6 @@ function run_trajectory!(traj::Trajectory)
 
     load_existing_trajectory_data!(traj)
     compute_missing_parameters!(traj)
-    @show typeof(traj.projectors) , typeof(traj.state)
     time_evolve!(traj)
     remove_excess_data!(traj)
     # GC.gc(true)

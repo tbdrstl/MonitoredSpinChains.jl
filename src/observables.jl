@@ -18,7 +18,7 @@ end
 function get_observables(circuit::Circuit)::Observables
     observables = Observables()
     for obs in circuit.observables
-        obs == :OP && (observables.total_proj = zeros(circuit.meas_steps, 2))
+        obs == :OP && (observables.total_proj = zeros(circuit.meas_steps, 3))
         obs == :EE && (observables.entanglement_entropy = zeros(circuit.meas_steps))
         obs == :M && (observables.magnetization = zeros(circuit.meas_steps, 2))
         #obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
@@ -39,8 +39,9 @@ function total_projector(traj::Trajectory)
     end
     OP = OP / L
     OPvar = OPvar / L - OP^2
+    OP2 = OP^2
 
-    return OP, OPvar
+    return OP, OPvar, OP2
 end
 
 function entanglement_entropy_general(traj::SpinHalfTrajectory, A::AbstractVector{Int})

@@ -9,7 +9,7 @@ function get_observables!(traj::Trajectory)
         obs == :OP && (traj.observables.total_proj[current_meas_step, :] .= total_projector(traj))
         obs == :EE && (traj.observables.entanglement_entropy[current_meas_step] = entanglement_entropy_general(traj,1:div(traj.circuit.L,2)))
         obs == :M && (traj.observables.magnetization[current_meas_step, :] .= magnetization(traj))
-        #obs == :MX && (traj.observables.magnetizationX[current_meas_step, :] .= magnetizationX(traj))
+        obs == :MX && (traj.observables.magnetizationX[current_meas_step, :] .= magnetizationX(traj))
     end
 
     return
@@ -21,7 +21,7 @@ function get_observables(circuit::Circuit)::Observables
         obs == :OP && (observables.total_proj = zeros(circuit.meas_steps, 3))
         obs == :EE && (observables.entanglement_entropy = zeros(circuit.meas_steps))
         obs == :M && (observables.magnetization = zeros(circuit.meas_steps, 2))
-        #obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
+        obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
     end
     return observables
 end

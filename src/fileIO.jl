@@ -1,3 +1,5 @@
+export remove_corrupted_trajectories
+
 
 # save trajectory to file only every 10th timestep to avoid IO overhead
 function save_trajectory(traj::Trajectory)
@@ -204,4 +206,28 @@ function remove_single_trajectories(sim::Simulation)
     for circuit in sim.params
         remove_single_trajectories(circuit)
     end
+end
+
+
+
+function remove_corrupted_trajectories(sim::Simulation; remove::Bool=false, verbose::Bool=true)
+    traj = get_trajectories_from_simulation(sim)
+    corrupted = []
+    for i in 1:length(traj)
+        try MonitoredSpinChains.load_existing_trajectory_data!(traj[i])
+        catch e
+            println(e) 
+            println(i)
+            if remove
+                verbose && println("Removing corrupted trajectory $(i)")
+                rm(trajectory_to_filename(traj[i]))
+            else
+                push!(corrupted, i)
+                verbose && println("Corrupted trajectory $(i) found. Please remove it manually.")
+            end
+        end
+    end
+    !(remove) && println("Corrupted trajectories found: $(corrupted)")
+    !(remove) && println("Recall function with kwarg remove=true to remove corrupted trajectories.")
+    return corrupted
 end

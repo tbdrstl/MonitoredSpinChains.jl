@@ -6,7 +6,7 @@ abstract type SpinHalfTrajectory <: Trajectory end
     total_proj        ::Union{Missing,Matrix{Float64}} = missing
     entanglement_entropy::Union{Missing,Vector{Float64}} = missing
     magnetization     ::Union{Missing,Matrix{Float64}} = missing
-    magnetizationX    ::Union{Missing,Matrix{Float64}} = missing
+    #magnetizationX    ::Union{Missing,Matrix{Float64}} = missing
 end
 
 struct Circuit 

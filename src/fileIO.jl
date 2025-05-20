@@ -35,17 +35,16 @@ function load_existing_trajectory_data!(traj::Trajectory)
         # remove file to ensure simulation continues (compute trajectory again)
         f = try 
             load(file)
+            traj.trajectoryID = f["trajectoryID"]
+            traj.state = f["state"]
+            traj.observables = f["observables"]
+            traj.current_timestep = f["current_timestep"]
+            # if file has been saved, state is already thermalized. Important to be able to continue computation from loaded file
+            traj.thermalized = true
         catch 
             rm(file)
             return
         end
-
-        traj.trajectoryID = f["trajectoryID"]
-        traj.state = f["state"]
-        traj.observables = f["observables"]
-        traj.current_timestep = f["current_timestep"]
-        # if file has been saved, state is already thermalized. Important to be able to continue computation from loaded file
-        traj.thermalized = true
     end
 end
 

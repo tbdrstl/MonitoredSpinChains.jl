@@ -212,8 +212,8 @@ end
 
 function remove_corrupted_trajectories(sim::Simulation; remove::Bool=false, verbose::Bool=true)
     traj = get_trajectories_from_simulation(sim)
-    corrupted = []
-    for i in 1:length(traj)
+    corrupted = Int[]
+    @showprogress for i in 1:length(traj)
         try MonitoredSpinChains.load_existing_trajectory_data!(traj[i])
         catch e
             println(e) 

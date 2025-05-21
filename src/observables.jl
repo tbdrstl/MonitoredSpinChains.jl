@@ -31,7 +31,7 @@ function get_observables(circuit::Circuit)::Observables
         obs == :EE && (observables.entanglement_entropy = zeros(circuit.meas_steps))
         obs == :M && (observables.magnetization = zeros(circuit.meas_steps, 2))
         obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
-        obs == :EEfin && (observables.entanglement_entropy = zeros(div(L,2)))
+        obs == :EEfin && (observables.entanglement_entropy = zeros(div(circuit.L,2)))
     end
     return observables
 end

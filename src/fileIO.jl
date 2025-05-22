@@ -1,4 +1,5 @@
-export remove_corrupted_trajectories
+export remove_corrupted_trajectories,
+average_trajectories_from_collect
 
 
 # save trajectory to file only every 10th timestep to avoid IO overhead
@@ -116,8 +117,6 @@ function collect_data(sim::Simulation)
         collect_data(circuit)
         if circuit.trajectories_averaged == true
             average_trajectories(circuit)
-        else
-            collect_data(circuit)
         end
         remove_single_trajectories(circuit) 
     end
@@ -130,7 +129,7 @@ function collect_data(circuit::Circuit)
         file1 = circuit_to_filename(circuit, trajID)
         observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
         jldopen(file,"a+") do f
-            f[file1] = observables
+            f[string(hash(circuit, trajID))] = observables
         end
     end
 end
@@ -177,6 +176,33 @@ function average_trajectories(circuit::Circuit)
 
     jldsave(circuit_to_filename(circuit, 0; average=true); observables, circuit)
 
+    return
+end
+
+# assume collect_data(circuit) has already been performend. Use the files created there to average the data
+function average_trajectories_from_collect(circuit::Circuit)
+    if !isdir(joinpath(circuit.result_folder, "average"))
+        mkdir(joinpath(circuit.result_folder, "average"))
+    end
+    file1 = circuit_to_filename(circuit)
+    jldopen(file1,"r") do f
+        observables = f[string(hash(circuit, 1))]
+        for id in 2:circuit.average
+            add!(observables,f[string(hash(circuit, id))])
+        end
+        divide!(observables, circuit.average)
+        jldsave(circuit_to_filename(circuit, 0; average=true); observables, circuit)
+    end
+    return
+end
+
+function average_trajectories_from_collect(sim::Simulation)
+    if !isdir(joinpath(sim.params[1].result_folder, "average"))
+        mkdir(joinpath(sim.params[1].result_folder, "average"))
+    end
+    for circuit in sim.params
+        average_trajectories_from_collect(circuit)
+    end
     return
 end
 

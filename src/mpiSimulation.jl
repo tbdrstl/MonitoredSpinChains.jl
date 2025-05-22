@@ -16,6 +16,18 @@ function simulate(sim::Simulation)
     # collect all trajectories
     trajectories = get_trajectories_from_simulation(sim)
     ntrajectories = length(trajectories)
+    MPI.Barrier(comm)
+
+    # if simulation has been computed before (ntrajectories == 0) inform and exit
+    if ntrajectories == 0
+
+        if rank == root
+            printstyled("Simulation has been computed before. Check $(normpath(sim.params_dict["result_folder"])) for results. Exiting..."; color=:reverse)
+        end
+        MPI.Barrier(comm)
+        MPI.Finalize()
+        return
+    end
 
     MPI.Barrier(comm)
     if rank == root
@@ -76,13 +88,40 @@ function simulate(sim::Simulation)
         println("Dispatched to $(nworkers) MPI procs. Waiting for results...")
     end
     MPI.Barrier(comm)
+    t1 = MPI.Wtime()
     
+    # make all workers collect data
     if rank == root
         println("Collecting data...")
-        @time collect_data(sim)
+        ncircs = 1:length(sim.params)
+        part = [ncircs[i:nworkers:end] for i in 1:nworkers]
+        for i in 1:nworkers
+            MPI.send(part[i],comm; dest=i)
+        end
+    else
+        todo = MPI.recv(comm)
+        circs = sim.params[todo]
+        for circuit in circs
+            collect_data(circuit)
+        end
+    end
+
+    MPI.Barrier(comm)
+
+    # average data
+    if rank == root
+        println("Averaging data...")
+        @time average_trajectories_from_collect(sim)
         println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
     end
     
+    MPI.Barrier(comm)
+    t2 = MPI.Wtime()
+    if rank == root
+        println("Simulation took $(t2 - t1) seconds.")
+        println("Simulation took $(t2 - t1)/60 minutes.")
+        println("Simulation took $(t2 - t1)/3600 hours.")
+    end
     MPI.Barrier(comm)
     MPI.Finalize()
 end

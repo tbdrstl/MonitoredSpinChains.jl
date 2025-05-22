@@ -1,7 +1,7 @@
 using MonitoredSpinChains
 import MonitoredSpinChains: mpiexec
 
-nworker = 5
+nworker = 10
 
 p = run(`$(mpiexec()) -n $nworker $(Base.julia_cmd()) full_sim.jl`)
 

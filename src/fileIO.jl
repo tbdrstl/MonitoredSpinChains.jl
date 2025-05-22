@@ -3,28 +3,36 @@ export remove_corrupted_trajectories
 
 # save trajectory to file only every 10th timestep to avoid IO overhead
 function save_trajectory(traj::Trajectory)
-    if traj.current_timestep >= traj.circuit.meas_steps*traj.circuit.meas_every || traj.current_timestep % 30 == 0
-        file = trajectory_to_filename(traj)
-    
-        jldsave(file; traj.trajectoryID, traj.state, traj.observables, traj.current_timestep, circuit = traj.circuit)
+    if traj.current_timestep >= traj.circuit.meas_steps*traj.circuit.meas_every
+        save_traj(traj)
+    end
+    # do not save small trajectories inbetween. They run very fast anyways
+    if traj.circuit.L > 12 && traj.current_timestep % 30 == 0
+        save_traj(traj)
+    end
+end
 
-        jldopen(file,"w") do f
-            f["trajectoryID"] = traj.trajectoryID
-            f["state"] = traj.state
-            f["observables"] = traj.observables
-            f["current_timestep"] = traj.current_timestep
-            
-            # save circuit to group to save initial state as string. Never loaded again
-            circuit = JLD2.Group(f, "circuit")
-            for field in fieldnames(typeof(traj.circuit))
-                # Skip the `initialState` field
-                if field != :initialState
-                    # Save each field in the "circuit" group
-                    circuit[string(field)] = getfield(traj.circuit, field)
-                end
+function save_traj(traj::Trajectory)
+    file = trajectory_to_filename(traj)
+    
+    jldsave(file; traj.trajectoryID, traj.state, traj.observables, traj.current_timestep, circuit = traj.circuit)
+
+    jldopen(file,"w") do f
+        f["trajectoryID"] = traj.trajectoryID
+        f["state"] = traj.state
+        f["observables"] = traj.observables
+        f["current_timestep"] = traj.current_timestep
+        
+        # save circuit to group to save initial state as string. Never loaded again
+        circuit = JLD2.Group(f, "circuit")
+        for field in fieldnames(typeof(traj.circuit))
+            # Skip the `initialState` field
+            if field != :initialState
+                # Save each field in the "circuit" group
+                circuit[string(field)] = getfield(traj.circuit, field)
             end
-            circuit["initialState"] = string(traj.circuit.initialState)
         end
+        circuit["initialState"] = string(traj.circuit.initialState)
     end
 end
 

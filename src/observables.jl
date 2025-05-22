@@ -14,7 +14,7 @@ function get_observables!(traj::Trajectory)
         if obs == :EEfin && traj.current_timestep == traj.circuit.meas_steps*traj.circuit.meas_every
             # Calculate the entanglement entropy for the final state
             for lmax in 1:div(traj.circuit.L,2)
-                A = 1:div(lmax,2)
+                A = 1:lmax
                 ent = entanglement_entropy_general(traj.state, A)
                 traj.observables.entanglement_entropy[lmax] = ent
             end

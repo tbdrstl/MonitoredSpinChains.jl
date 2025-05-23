@@ -15,7 +15,7 @@ function get_observables!(traj::Trajectory)
             # Calculate the entanglement entropy for the final state
             for lmax in 1:div(traj.circuit.L,2)
                 A = 1:lmax
-                ent = entanglement_entropy_general(traj.state, A)
+                ent = entanglement_entropy_general(traj, A)
                 traj.observables.entanglement_entropy[lmax] = ent
             end
         end
@@ -56,6 +56,10 @@ end
 
 function entanglement_entropy_general(traj::SpinHalfTrajectory, A::AbstractVector{Int})
     return entanglement_entropy_general(traj.state, A)
+end
+
+function entanglement_entropy_general(traj::SpinOneTrajectory, A::AbstractVector{Int})
+    return entanglement_entropy_general_spinOne(traj.state, A)
 end
 
 function entanglement_entropy_general(psi::AbstractVector{T}, A::AbstractVector{Int}) where {T <: Union{Float64, ComplexF64}}

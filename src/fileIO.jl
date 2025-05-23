@@ -161,10 +161,15 @@ function average_trajectories(circuit::Circuit)
     file1 = circuit_to_filename(circuit, 1)
     
     observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
+    obs2 = deepcopy(observables)
+    square!(obs2)
     for trajID in 2:circuit.average
         file = circuit_to_filename(circuit, trajID)
         if isfile(file)
-            add!(observables, load(file, "observables"))
+            obs = load(file, "observables")
+            add!(observables, obs)
+            square!(obs)
+            add!(obs2, obs)
         else
             println(circuit)
             println(trajID)
@@ -173,8 +178,14 @@ function average_trajectories(circuit::Circuit)
         end
     end
     divide!(observables, circuit.average)
+    divide!(obs2, circuit.average)
 
-    jldsave(circuit_to_filename(circuit, 0; average=true); observables, circuit)
+    obstothe2 = deepcopy(observables)
+    square!(obstothe2)
+
+    errors = divide!(sqrt!(subtract!(obs2, obstothe2)),sqrt(circuit.average))
+
+    jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
 
     return
 end
@@ -187,11 +198,18 @@ function average_trajectories_from_collect(circuit::Circuit)
     file1 = circuit_to_filename(circuit)
     jldopen(file1,"r") do f
         observables = f[string(hash(circuit, 1))]
+        obs2 = deepcopy(observables)
+        obs2 = square!(obs2)
         for id in 2:circuit.average
-            add!(observables,f[string(hash(circuit, id))])
+            obs = f[string(hash(circuit, id))]
+            add!(observables, obs)
+            square!(obs)
+            add!(obs2, obs)
         end
         divide!(observables, circuit.average)
-        jldsave(circuit_to_filename(circuit, 0; average=true); observables, circuit)
+        divide!(obs2, circuit.average)
+        errors = sqrt.(obs2 .- observables.^2)./sqrt(circuit.average)
+        jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
     end
     return
 end

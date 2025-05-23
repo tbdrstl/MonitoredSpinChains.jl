@@ -87,6 +87,27 @@ function divide!(a::Observables,b::Number) ::Observables
     return a
 end
 
+function square!(a::Observables) ::Observables
+    for field in fieldnames(Observables)
+        setfield!(a, field, getfield(a, field).^2)
+    end 
+    return a
+end
+
+function sqrt!(a::Observables) ::Observables
+    for field in fieldnames(Observables)
+        setfield!(a, field, sqrt.(getfield(a, field)))
+    end 
+    return a
+end
+
+function subtract!(a::Observables,b::Observables) ::Observables
+    for field in fieldnames(Observables)
+        setfield!(a, field, getfield(a, field) - getfield(b, field))
+    end 
+    return a
+end
+
 function hash(circ::Circuit)
     fnames = fieldnames(typeof(circ))
     to_hash = ""

@@ -125,13 +125,16 @@ end
 function collect_data(circuit::Circuit)
     file = circuit_to_filename(circuit)
 
-    for trajID in 1:circuit.average
-        file1 = circuit_to_filename(circuit, trajID)
-        observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
-        jldopen(file,"a+") do f
-            f[string(hash(circuit, trajID))] = observables
+    jldopen(file,"a+") do f
+        for trajID in 1:circuit.average
+            file1 = circuit_to_filename(circuit, trajID)
+            observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
+            if !haskey(f, string(hash(circuit, trajID)))
+                f[string(hash(circuit, trajID))] = observables
+            end
         end
     end
+    remove_single_trajectories(circuit)
 end
 
 function save_parameter_file(params::Dict)
@@ -183,7 +186,7 @@ function average_trajectories(circuit::Circuit)
     obstothe2 = deepcopy(observables)
     square!(obstothe2)
 
-    errors = divide!(sqrt!(subtract!(obs2, obstothe2)),sqrt(circuit.average))
+    errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(circuit.average))
 
     jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
 
@@ -208,7 +211,11 @@ function average_trajectories_from_collect(circuit::Circuit)
         end
         divide!(observables, circuit.average)
         divide!(obs2, circuit.average)
-        errors = divide!(sqrt!(subtract!(obs2, square!(observables))), sqrt(circuit.average))
+
+        obstothe2 = deepcopy(observables)
+        square!(obstothe2)
+
+        errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(circuit.average))
         jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
     end
     return

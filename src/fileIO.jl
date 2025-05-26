@@ -208,7 +208,7 @@ function average_trajectories_from_collect(circuit::Circuit)
         end
         divide!(observables, circuit.average)
         divide!(obs2, circuit.average)
-        errors = sqrt.(obs2 .- observables.^2)./sqrt(circuit.average)
+        errors = divide!(sqrt!(subtract!(obs2, square!(observables))), sqrt(circuit.average))
         jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
     end
     return

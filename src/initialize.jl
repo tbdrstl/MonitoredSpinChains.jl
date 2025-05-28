@@ -44,6 +44,10 @@ function get_proj_su2(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{Complex
     return projectors
 end
 
+function get_proj_aklt(L::Int64) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    # to be implemented!
+end
+
 function get_projectors(circuit::Circuit)
     trajtype = determine_trajectory(circuit)
     L = circuit.L
@@ -60,7 +64,8 @@ function get_projectors(circuit::Circuit)
         projectors = get_proj_su2(L; pbc=true)
     elseif trajtype == SU2Trajectory
         projectors = get_proj_su2(L; pbc=false)
-    else
+    elseif trajtype == AKLTPBCTrajectory
+        projectors = get_proj_aklt(L)
         error("Unknown trajectory type.")
     end
     return projectors
@@ -180,11 +185,15 @@ function determine_trajectory(circuit::Circuit)
 
     # check local spin
     if circuit.model == "fredkin"
-        traj_type += 0
+        traj_type += 1
     elseif circuit.model == "motzkin"
-        traj_type += 2
+        traj_type += 3
     elseif circuit.model == "su2"
-        traj_type += 4
+        traj_type += 5
+    elseif circuit.model == "aklt"
+        traj_type += 7
+    else
+        error("Unknown model type: $(circuit.model)")
     end
     
     # check boundary condition
@@ -195,18 +204,22 @@ function determine_trajectory(circuit::Circuit)
     end
 
     # assert trajectory type
-    if traj_type == 0
+    if traj_type == 1
         return FredkinTrajectory
-    elseif traj_type == 1
-        return FredkinPBCTrajectory
     elseif traj_type == 2
-        return MotzkinTrajectory
+        return FredkinPBCTrajectory
     elseif traj_type == 3
-        return MotzkinPBCTrajectory
+        return MotzkinTrajectory
     elseif traj_type == 4
-        return SU2Trajectory
+        return MotzkinPBCTrajectory
     elseif traj_type == 5
+        return SU2Trajectory
+    elseif traj_type == 6
         return SU2PBCTrajectory
+    elseif traj_type == 7
+        error("AKLT only supports PBC")
+    elseif traj_type == 8
+        return AKLTPBCTrajectory
     else
         error("Assertion of trajectory type failed.")
     end

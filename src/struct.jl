@@ -76,6 +76,16 @@ end
     zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
+@kwdef mutable struct AKLTPBCTrajectory <: SpinOneTrajectory
+    trajectoryID    ::Int64
+    circuit         ::Circuit
+    current_timestep::Int64
+    thermalized     ::Bool
+    state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
+    observables     ::Union{Missing,Observables} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
+end
+
 @kwdef mutable struct MotzkinTrajectory <: SpinOneTrajectory
     trajectoryID    ::Int64
     circuit         ::Circuit

@@ -61,7 +61,7 @@ const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
 
 const legal_observables = [:OP, :EE, :M, :MX, :EEfin]
 const legal_feedbacks = [:Id, :Z]
-const legal_models = ["fredkin", "motzkin", "su2"]
+const legal_models = ["fredkin", "motzkin", "su2", "aklt"]
 const required_params = [   "name", 
                             "systemSize", 
                             "meas_steps", 

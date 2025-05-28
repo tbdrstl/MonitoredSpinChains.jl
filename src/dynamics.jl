@@ -101,8 +101,31 @@ function correct!(traj::FredkinPBCTrajectory, site::Int)
     return 
 end
 
+function correct!(traj::AKLTPBCTrajectory, site::Int)
+    L = traj.circuit.L
+    # correct the state
+    if rand(Bool) # correct with Z
+        traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
+    else # correct with XX
+        if site < L-1
+            traj.state .= (speye(3^(site-1)) ⊗ Xm ⊗ Xm ⊗ speye(3^(L-site-1))) * traj.state
+        else
+            site = mod1(site, L)
+            traj.state .= (Xm ⊗ speye(3^(L-2)) ⊗ Xm) * traj.state
+        end
+
+    end
+    if site < L-1
+        traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
+    else
+        site = mod1(site, L)
+        traj.state .= (speye(3^(site-1)) ⊗ Xm ⊗ speye(3^(L-site))) * traj.state
+    end
+    return 
+end
+
 function correct!(traj::MotzkinTrajectory, site::Int)
-    L = Int(round(log(3,length(traj.state))))
+    L = traj.circuit.L
     # correct the state
     if site < L-1
         traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
@@ -114,7 +137,7 @@ function correct!(traj::MotzkinTrajectory, site::Int)
 end
 
 function correct!(traj::MotzkinPBCTrajectory, site::Int)
-    L = Int(round(log(3,length(traj.state))))
+    L = traj.circuit.L
     # correct the state
     traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
 end

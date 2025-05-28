@@ -48,6 +48,12 @@ function time_step!(circuit::Circuit, traj::Trajectory)#, unitaryTimeEvolProb::F
     return traj
 end
 
+function time_step!(circuit::Circuit, traj::SU2PBCTrajectory)#, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: SU2Trajectory
+    @unpack L, measurement = circuit
+    measurement && meas!(traj, rand(1:L-1))
+    return traj
+end
+
 function meas!(traj::Trajectory, site::Int)
     Ppsi = traj.projectors[site] * traj.state
     prob = real(dot(traj.state, Ppsi))
@@ -61,6 +67,15 @@ function meas!(traj::Trajectory, site::Int)
     end
 
     return 
+end
+
+function correct!(traj::SU2Trajectory, site::Int)
+    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
+end
+
+function correct!(traj::SU2PBCTrajectory, site::Int)
+    # assumes site is in [1, L-1] !!
+    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
 end
 
 function correct!(traj::FredkinTrajectory, site::Int)

@@ -35,6 +35,15 @@ function get_proj_motzkin_pbc(L::Int)
     return vcat(projectors, [pbc_proj])
 end
 
+function get_proj_su2(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
+    projectors = [speye(2^(site-1))⊗ Projector ⊗speye(2^(L-site-1)) for site in 1:L-1]
+    if pbc
+        pbc_proj = [(speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25]
+        return vcat(projectors, pbc_proj)
+    end
+    return projectors
+end
+
 function get_projectors(circuit::Circuit)
     trajtype = determine_trajectory(circuit)
     L = circuit.L
@@ -47,6 +56,10 @@ function get_projectors(circuit::Circuit)
         projectors = get_proj_motzkin_pbc(L)
     elseif trajtype == MotzkinTrajectory
         projectors = get_proj_motzkin(L)
+    elseif trajtype == SU2PBCTrajectory
+        projectors = get_proj_su2(L; pbc=true)
+    elseif trajtype == SU2Trajectory
+        projectors = get_proj_su2(L; pbc=false)
     else
         error("Unknown trajectory type.")
     end
@@ -96,7 +109,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
         (_,trajectories_averaged) in enumerate(params["trajectories_averaged"]),
         (_,thermalizationSteps) in enumerate(params["thermalizationSteps"]),
         (_,meas_every) in enumerate(params["meas_every"]),
-        (_,local_spin) in enumerate(params["local_spin"])
+        (_,model) in enumerate(params["model"])
 
         
         push!(vector_of_circuits, Circuit(
@@ -114,7 +127,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
             trajectories_averaged,
             thermalizationSteps(systemSize),
             meas_every(systemSize),
-            local_spin
+            model
         ))
     end
 
@@ -166,10 +179,12 @@ function determine_trajectory(circuit::Circuit)
     traj_type = 0
 
     # check local spin
-    if circuit.local_spin == 0.5
+    if circuit.model == "fredkin"
         traj_type += 0
-    elseif isone(circuit.local_spin)
+    elseif circuit.model == "motzkin"
         traj_type += 2
+    elseif circuit.model == "su2"
+        traj_type += 4
     end
     
     # check boundary condition
@@ -188,6 +203,10 @@ function determine_trajectory(circuit::Circuit)
         return MotzkinTrajectory
     elseif traj_type == 3
         return MotzkinPBCTrajectory
+    elseif traj_type == 4
+        return SU2Trajectory
+    elseif traj_type == 5
+        return SU2PBCTrajectory
     else
         error("Assertion of trajectory type failed.")
     end

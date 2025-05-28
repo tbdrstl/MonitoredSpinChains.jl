@@ -61,6 +61,7 @@ const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
 
 const legal_observables = [:OP, :EE, :M, :MX, :EEfin]
 const legal_feedbacks = [:Id, :Z]
+const legal_models = ["fredkin", "motzkin", "su2"]
 const required_params = [   "name", 
                             "systemSize", 
                             "meas_steps", 
@@ -74,6 +75,6 @@ const required_params = [   "name",
                             "trajectories_averaged", 
                             "thermalizationSteps", 
                             "meas_every",
-                            "local_spin"]
+                            "model"]
 
 const anomalousstatepath = joinpath(homedir(),".julia/data/fredkin_pbc_anomalous_ground_states")

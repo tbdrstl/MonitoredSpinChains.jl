@@ -24,12 +24,34 @@ struct Circuit
     trajectories_averaged   ::Bool
     thermalizationSteps     ::Int
     meas_every              ::Int
-    local_spin              ::Float64
+    model                   ::String
 end
 struct Simulation
     name            ::String
     params          ::Vector{Circuit}
     params_dict     ::Dict
+end
+
+@kwdef mutable struct SU2Trajectory <: SpinHalfTrajectory
+    trajectoryID    ::Int64
+    circuit         ::Circuit
+    current_timestep::Int64
+    thermalized     ::Bool
+    observables     ::Union{Missing,Observables} = missing
+    state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
+    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
+end
+
+@kwdef mutable struct SU2PBCTrajectory <: SpinHalfTrajectory
+    trajectoryID    ::Int64
+    circuit         ::Circuit
+    current_timestep::Int64
+    thermalized     ::Bool
+    observables     ::Union{Missing,Observables} = missing
+    state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
+    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
 @kwdef mutable struct FredkinTrajectory <: SpinHalfTrajectory
@@ -53,6 +75,7 @@ end
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
     zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
+
 @kwdef mutable struct MotzkinTrajectory <: SpinOneTrajectory
     trajectoryID    ::Int64
     circuit         ::Circuit

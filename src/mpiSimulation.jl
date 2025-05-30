@@ -118,7 +118,7 @@ function simulate(sim::Simulation)
     MPI.Barrier(comm)
     t2 = MPI.Wtime()
     if rank == root
-        println("Simulation took $(round(((t2 - t1)/3600)))h $(round((t2 - t1)/60))min $(round((t2 - t1)))s.")
+        println("Collecting and Averaging took $(round(((t2 - t1)/3600)))h $(round((t2 - t1)/60))min $(round((t2 - t1)))s.")
     end
     MPI.Barrier(comm)
     MPI.Finalize()

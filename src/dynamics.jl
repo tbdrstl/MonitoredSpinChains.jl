@@ -48,6 +48,12 @@ function time_step!(circuit::Circuit, traj::Trajectory)#, unitaryTimeEvolProb::F
     return traj
 end
 
+function time_step!(circuit::Circuit, traj::SU2PBCTrajectory)#, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: SU2Trajectory
+    @unpack L, measurement = circuit
+    measurement && meas!(traj, rand(1:L-1))
+    return traj
+end
+
 function meas!(traj::Trajectory, site::Int)
     Ppsi = traj.projectors[site] * traj.state
     prob = real(dot(traj.state, Ppsi))
@@ -61,6 +67,15 @@ function meas!(traj::Trajectory, site::Int)
     end
 
     return 
+end
+
+function correct!(traj::SU2Trajectory, site::Int)
+    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
+end
+
+function correct!(traj::SU2PBCTrajectory, site::Int)
+    # assumes site is in [1, L-1] !!
+    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
 end
 
 function correct!(traj::FredkinTrajectory, site::Int)
@@ -86,8 +101,31 @@ function correct!(traj::FredkinPBCTrajectory, site::Int)
     return 
 end
 
+function correct!(traj::AKLTPBCTrajectory, site::Int)
+    L = traj.circuit.L
+    # correct the state
+    if rand(Bool) # correct with Z
+        traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
+    else # correct with XX
+        if site < L-1
+            traj.state .= (speye(3^(site-1)) ⊗ Xm ⊗ Xm ⊗ speye(3^(L-site-1))) * traj.state
+        else
+            site = mod1(site, L)
+            traj.state .= (Xm ⊗ speye(3^(L-2)) ⊗ Xm) * traj.state
+        end
+
+    end
+    if site < L-1
+        traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
+    else
+        site = mod1(site, L)
+        traj.state .= (speye(3^(site-1)) ⊗ Xm ⊗ speye(3^(L-site))) * traj.state
+    end
+    return 
+end
+
 function correct!(traj::MotzkinTrajectory, site::Int)
-    L = Int(round(log(3,length(traj.state))))
+    L = traj.circuit.L
     # correct the state
     if site < L-1
         traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
@@ -99,7 +137,7 @@ function correct!(traj::MotzkinTrajectory, site::Int)
 end
 
 function correct!(traj::MotzkinPBCTrajectory, site::Int)
-    L = Int(round(log(3,length(traj.state))))
+    L = traj.circuit.L
     # correct the state
     traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
 end

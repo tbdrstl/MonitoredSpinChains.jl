@@ -20,19 +20,52 @@ end
 
 function get_proj_motzkin(L::Int)
     projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
-    push!(projectors, proj(downm)⊗speye(3^(L-1)))
-    push!(projectors, speye(3^(L-1))⊗proj(upm))
+    push!(projectors, proj(down1)⊗speye(3^(L-1)))
+    push!(projectors, speye(3^(L-1))⊗proj(up1))
     return projectors
 end
 
 function get_proj_motzkin_pbc(L::Int)
     projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
     
-    pbc_proj = 0.5 * (proj(upm⊗spzeros(3^(L-2))⊗flatm - flatm⊗spzeros(3^(L-2))⊗upm)
-    + proj(downm⊗spzeros(3^(L-2))⊗flatm - flatm⊗spzeros(3^(L-2))⊗downm)
-    + proj(upm⊗spzeros(3^(L-2))⊗downm - flatm⊗spzeros(3^(L-2))⊗flatm))
+    pbc_proj = 0.5 * (proj(upm⊗spzeros(3^(L-2))⊗flat1 - flat1⊗spzeros(3^(L-2))⊗upm)
+    + proj(downm⊗spzeros(3^(L-2))⊗flat1 - flat1⊗spzeros(3^(L-2))⊗downm)
+    + proj(upm⊗spzeros(3^(L-2))⊗downm - flat1⊗spzeros(3^(L-2))⊗flat1))
     
     return vcat(projectors, [pbc_proj])
+end
+
+function get_proj_su2(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
+    projectors = [speye(2^(site-1))⊗ Projector ⊗speye(2^(L-site-1)) for site in 1:L-1]
+    if pbc
+        pbc_proj = [(speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25]
+        return vcat(projectors, pbc_proj)
+    end
+    return projectors
+end
+
+function get_proj_aklt(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    projectors = [speye(3^(site-1)) ⊗ Proj1 ⊗ speye(3^(L-site-1)) for site in 1:L-1]
+    
+    if pbc 
+        # helper
+        u = up1; d = down1; f = flat1
+        P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3') # auto switch sites (1 and L) and use braket notation |v1v2><v3v4|
+        P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
+
+        # basis states
+        phi2 = P(u,u)
+        phi1 = 0.5*(P(u,f) + P(f,u) + P(u,f,f,u) + P(f,u,u,f))
+        phi0 = 1/6*(P(u,d) + P(d,u) + 4*P(f,f) + P(u,d,d,u) + P(d,u,u,d) + 2*(P(u,d,f,f) + P(d,u,f,f) + P(f,f,u,d) + P(f,f,d,u)))
+        phi_1= 0.5*(P(d,f) + P(f,d) + P(d,f,f,d) + P(f,d,d,f))
+        phi_2= P(d,d)
+
+        # total projector
+        pbc_proj = speye(3^L) - (phi2 + phi1 + phi0 + phi_1 + phi_2)
+        
+        return vcat(projectors, [pbc_proj])
+    end
+    return projectors
 end
 
 function get_projectors(circuit::Circuit)
@@ -47,6 +80,12 @@ function get_projectors(circuit::Circuit)
         projectors = get_proj_motzkin_pbc(L)
     elseif trajtype == MotzkinTrajectory
         projectors = get_proj_motzkin(L)
+    elseif trajtype == SU2PBCTrajectory
+        projectors = get_proj_su2(L; pbc=true)
+    elseif trajtype == SU2Trajectory
+        projectors = get_proj_su2(L; pbc=false)
+    elseif trajtype == AKLTPBCTrajectory
+        projectors = get_proj_aklt(L)
     else
         error("Unknown trajectory type.")
     end
@@ -96,7 +135,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
         (_,trajectories_averaged) in enumerate(params["trajectories_averaged"]),
         (_,thermalizationSteps) in enumerate(params["thermalizationSteps"]),
         (_,meas_every) in enumerate(params["meas_every"]),
-        (_,local_spin) in enumerate(params["local_spin"])
+        (_,model) in enumerate(params["model"])
 
         
         push!(vector_of_circuits, Circuit(
@@ -114,7 +153,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
             trajectories_averaged,
             thermalizationSteps(systemSize),
             meas_every(systemSize),
-            local_spin
+            model
         ))
     end
 
@@ -166,10 +205,16 @@ function determine_trajectory(circuit::Circuit)
     traj_type = 0
 
     # check local spin
-    if circuit.local_spin == 0.5
-        traj_type += 0
-    elseif isone(circuit.local_spin)
-        traj_type += 2
+    if circuit.model == "fredkin"
+        traj_type += 1
+    elseif circuit.model == "motzkin"
+        traj_type += 3
+    elseif circuit.model == "su2"
+        traj_type += 5
+    elseif circuit.model == "aklt"
+        traj_type += 7
+    else
+        error("Unknown model type: $(circuit.model)")
     end
     
     # check boundary condition
@@ -180,14 +225,22 @@ function determine_trajectory(circuit::Circuit)
     end
 
     # assert trajectory type
-    if traj_type == 0
+    if traj_type == 1
         return FredkinTrajectory
-    elseif traj_type == 1
-        return FredkinPBCTrajectory
     elseif traj_type == 2
-        return MotzkinTrajectory
+        return FredkinPBCTrajectory
     elseif traj_type == 3
+        return MotzkinTrajectory
+    elseif traj_type == 4
         return MotzkinPBCTrajectory
+    elseif traj_type == 5
+        return SU2Trajectory
+    elseif traj_type == 6
+        return SU2PBCTrajectory
+    elseif traj_type == 7
+        error("AKLT only supports PBC")
+    elseif traj_type == 8
+        return AKLTPBCTrajectory
     else
         error("Assertion of trajectory type failed.")
     end

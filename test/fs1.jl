@@ -15,7 +15,7 @@ params = Dict(
         "trajectories_averaged" => [true],
         "thermalizationSteps" => [x->x^3],
         "meas_every" => [x->1],
-        "local_spin" => [0.5],
+        "model" => ["fredkin"],
     )
     
     sim = create_simulation(params)

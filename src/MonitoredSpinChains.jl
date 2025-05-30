@@ -25,7 +25,8 @@ module MonitoredSpinChains
             simulate,
             get_trajectories_from_simulation,
             get_trajectories_from_circuit,
-            get_projectors
+            get_projectors,
+            ⊗
 
     include("struct.jl")
     include("constants.jl")

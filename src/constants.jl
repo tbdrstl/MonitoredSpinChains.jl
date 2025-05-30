@@ -13,9 +13,9 @@ export  X,
         fredkin,
         motzkin,
         sz,
-        upm,
-        flatm,
-        downm,
+        up1,
+        flat1,
+        down1,
         Xm
 
 
@@ -40,20 +40,35 @@ const singlet        ::SparseVector{Float64, Int64}               = sparse([0.,1
 const fredkin       ::SparseMatrixCSC{Float64, Int64}         = (up*up') ⊗ Projector + Projector ⊗ (down*down') |> SparseMatrixCSC{Float64, Int64}
 
 
-# implementation of Motzkin spin gate
-upm = [1,0,0]
-flatm = [0,1,0]
-downm = [0,0,1]
+# implementation of Motzkin/spin-1 gate
+const up1 = [1.,0.,0.]
+const flat1 = [0.,1.,0.]
+const down1 = [0.,0.,1.]
 
-Xm = [0 0 1; 0 1 0; 0 0 1]
+const Z1 = sparse(Diagonal([1.,0.,-1.]))
+const X1 = 
+const Xm = [0 0 1; 0 1 0; 0 0 1]
 
 function proj(vec::AbstractVector{N}) where N <: Number
     return vec * vec'
 end
 
-const U = 0.5 * proj(upm⊗flatm - flatm⊗upm)
-const D = 0.5 * proj(downm⊗flatm - flatm⊗downm)
-const F = 0.5 * proj(upm⊗downm - flatm⊗flatm)
+function spin1_max_angular_mom_proj() 
+    p = (
+          proj(up1 ⊗ up1 )
+        + proj(down1 ⊗ down1 )
+        + proj(1.0/sqrt(2)*(up1⊗flat1 + flat1 ⊗ up1) )
+        + proj(1.0/sqrt(2)*(down1 ⊗ flat1 + flat1 ⊗ down1))
+        + proj(1.0/sqrt(6)*(up1 ⊗ down1 + 2*flat1⊗flat1 + down1 ⊗ up1))
+    )
+    return p |> SparseMatrixCSC
+end
+
+const Proj1 = speye(3^2) - spin1_max_angular_mom_proj()
+
+const U = 0.5 * proj(up1⊗flat1 - flat1⊗up1)
+const D = 0.5 * proj(down1⊗flat1 - flat1⊗down1)
+const F = 0.5 * proj(up1⊗down1 - flat1⊗flat1)
 const motzkin = U + D + F |> SparseMatrixCSC{ComplexF64, Int64}
 
 # const sz = Diagonal([1,-1,1]) |> SparseMatrixCSC{ComplexF64, Int64}

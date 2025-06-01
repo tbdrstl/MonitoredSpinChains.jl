@@ -157,6 +157,43 @@ function magnetization(traj::SpinHalfTrajectory)
     return M, varM
 end
 
+function magnetization(traj::SpinOneTrajectory)
+    @unpack L = traj.circuit
+
+    M = 0.0
+    varM = 0.0
+
+
+    @fastmath @inbounds for site in 1:L
+        m = 0.5*dot(traj.state, speye(3^(site - 1)) ⊗ Z1 ⊗ speye(3^(L - site)), traj.state)
+        
+        M += m
+        varM += m^2
+    end
+    M = real(M) / L
+    varM = real(varM) / L - M^2
+
+    return M, varM
+end
+
+function magnetizationX(traj::SpinOneTrajectory)
+    @unpack L = traj.circuit
+
+    M = 0.0
+    varM = 0.0
+
+    @fastmath @inbounds for site in 1:L
+        m = 0.5*dot(traj.state, speye(3^(site - 1)) ⊗ X1 ⊗ speye(3^(L - site)), traj.state)
+
+        M += m
+        varM += m^2
+    end
+    M = real(M) / L
+    varM = real(varM) / L - M^2
+
+    return M, varM
+end
+
 function magnetizationX(traj::SpinHalfTrajectory)
     @unpack L = traj.circuit
 

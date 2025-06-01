@@ -44,7 +44,7 @@ end
 
 function flat_spin1(L::Int)
     L == 1 && return flat1
-    return flat_spin1(L-1) ⊗ flat1
+    return flat_spin1(L-1) ⊗ flat1 |> Vector{ComplexF64}
 end
 
 function anomalous_ground_state(L::Int)

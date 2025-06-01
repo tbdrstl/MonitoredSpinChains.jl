@@ -38,7 +38,7 @@ function neelState(L::Int64) :: AbstractVector{Float64}
         end
     end
 
-    return psi
+    return psi |> Vector{Float64}
 end
 
 function anomalous_ground_state(L::Int)

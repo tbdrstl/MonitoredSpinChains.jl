@@ -46,8 +46,9 @@ const flat1 = [0.,1.,0.]
 const down1 = [0.,0.,1.]
 
 const Z1 = sparse(Diagonal([1.,0.,-1.]))
-const X1 = 
-const Xm = [0 0 1; 0 1 0; 0 0 1]
+const exp_z1 = sparse(Diagonal([im, 1, -im]))
+const X1 = [0 1 0; 1 0 1; 0 1 0] ./ sqrt(2)
+const exp_x1 = [0.5 im/sqrt(2)  -0.5; im/sqrt(2) 0 im/sqrt(2); -0.5 im/sqrt(2) 0.5]
 
 function proj(vec::AbstractVector{N}) where N <: Number
     return vec * vec'

@@ -48,6 +48,7 @@ const down1 = [0.,0.,1.]
 const Z1 = sparse(Diagonal([1.,0.,-1.]))
 const exp_z1 = sparse(Diagonal([im, 1, -im]))
 const X1 = [0 1 0; 1 0 1; 0 1 0] ./ sqrt(2)
+const PauliX1 = [0. 0. 1.; 1. 0. 0. ; 0. 1. 0.]
 const exp_x1 = [0.5 im/sqrt(2)  -0.5; im/sqrt(2) 0 im/sqrt(2); -0.5 im/sqrt(2) 0.5]
 
 function proj(vec::AbstractVector{N}) where N <: Number
@@ -69,7 +70,7 @@ const Proj1 = speye(3^2) - spin1_max_angular_mom_proj()
 
 const U = 0.5 * proj(up1⊗flat1 - flat1⊗up1)
 const D = 0.5 * proj(down1⊗flat1 - flat1⊗down1)
-const F = 0.5 * proj(up1⊗down1 - flat1⊗flat1)
+const F = 0.5 * proj(flat1⊗flat1 - up1⊗down1)
 const motzkin = U + D + F |> SparseMatrixCSC{ComplexF64, Int64}
 
 # const sz = Diagonal([1,-1,1]) |> SparseMatrixCSC{ComplexF64, Int64}

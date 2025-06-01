@@ -3,7 +3,8 @@ export rand_spinhalf_im,
         rand_spinhalf_real,
         rand_spinone_real,
         neelState,
-        anomalous_ground_state
+        anomalous_ground_state,
+        flat_spin1
 
 
 function rand_spinhalf_im(L::Int)
@@ -39,6 +40,11 @@ function neelState(L::Int64) :: AbstractVector{Float64}
     end
 
     return psi |> Vector{Float64}
+end
+
+function flat_spin1(L::Int)
+    L == 1 && return flat1
+    return flat_spin1(L-1) ⊗ flat1
 end
 
 function anomalous_ground_state(L::Int)

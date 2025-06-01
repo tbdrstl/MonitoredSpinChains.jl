@@ -28,10 +28,14 @@ end
 function get_proj_motzkin_pbc(L::Int)
     projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
     
-    pbc_proj = 0.5 * (proj(upm⊗spzeros(3^(L-2))⊗flat1 - flat1⊗spzeros(3^(L-2))⊗upm)
-    + proj(downm⊗spzeros(3^(L-2))⊗flat1 - flat1⊗spzeros(3^(L-2))⊗downm)
-    + proj(upm⊗spzeros(3^(L-2))⊗downm - flat1⊗spzeros(3^(L-2))⊗flat1))
+    P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3') # auto switch sites (1 and L) and use braket notation |v1v2><v3v4|
+    P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
     
+    pbc_proj = 0.5*(
+        P(flat1, up1) - P(flat1, up1, up1, flat1) - P(up1, flat1, flat1, up1) + P(up1, flat1)
+    +   P(flat1, down1) + P(down1, flat1) - P(flat1, down1, down1, flat1) - P(down1, flat1, flat1, down1)
+    +   P(flat1,flat1) + P(down1,up1) - P(flat1,flat1,up1, down1) - P(up1, down1, flat1, flat1)
+    )
     return vcat(projectors, [pbc_proj])
 end
 

@@ -129,7 +129,19 @@ end
 
 function sqrt!(a::Observables) ::Observables
     for field in fieldnames(Observables)
-        setfield!(a, field, sqrt.(getfield(a, field)))
+        newfield = getfield(a, field)
+        if ismissing(newfield)
+            continue
+        end
+        # assume negative sqrt values can only appear for very small values 
+        for i in eachindex(newfield)
+            if newfield[i] > 0
+                newfield[i] = sqrt(newfield[i])
+            else 
+                newfield[i] = 0.
+            end
+        end
+        setfield!(a, field, newfield)
     end 
     return a
 end

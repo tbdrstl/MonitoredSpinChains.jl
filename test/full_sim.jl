@@ -5,8 +5,8 @@ params = Dict(
         "systemSize" => [6],
         "meas_steps" => [x->x^3],
         "average" => [1_000],
-        "bc" => [:pbc],
-        "initialState" => [neelState],
+        "bc" => [:pbc, :obc],
+        "initialState" => [flat_spin1],
         "measurement" => [true],
         "feedback" => [:Z],
         "result_folder" => joinpath(@__DIR__, "..", "test/test_data"),
@@ -14,7 +14,7 @@ params = Dict(
         "trajectories_averaged" => [true],
         "thermalizationSteps" => [x->0],
         "meas_every" => [x->1],
-        "model" => ["fredkin"],
+        "model" => ["motzkin"],
     )
 
     mkpath(params["result_folder"])

@@ -121,10 +121,10 @@ function correct!(traj::MotzkinTrajectory, site::Int)
     L = traj.circuit.L
     # correct the state
     if 1 < site < L-1
-        traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
+        traj.state .= (speye(3^(site-1)) ⊗ exp_z1 ⊗ speye(3^(L-site))) * traj.state
     else
         site = mod1(site, L)
-        traj.state .= (speye(3^(site-1)) ⊗ exp_x1 ⊗ speye(3^(L-site))) * traj.state
+        traj.state .= (speye(3^(site-1)) ⊗ Px ⊗ speye(3^(L-site))) * traj.state
     end
     return 
 end
@@ -132,7 +132,7 @@ end
 function correct!(traj::MotzkinPBCTrajectory, site::Int)
     L = traj.circuit.L
     # correct the state
-    traj.state .= (speye(3^(site-1)) ⊗ sz ⊗ speye(3^(L-site))) * traj.state
+    traj.state .= (speye(3^(site-1)) ⊗ exp_z1 ⊗ speye(3^(L-site))) * traj.state
 end
 
 function controlPsiZ!(state::AbstractVector{T}, feedbackIndices::Vector{I}) where {I<:Integer, T<:Union{Float64, ComplexF64}}

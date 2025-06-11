@@ -40,7 +40,7 @@ end
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
-    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
+    # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
 @kwdef mutable struct SU2PBCTrajectory <: SpinHalfTrajectory
@@ -51,7 +51,7 @@ end
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
-    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
+    # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
 @kwdef mutable struct FredkinTrajectory <: SpinHalfTrajectory
@@ -62,7 +62,7 @@ end
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
-    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
+    # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
 @kwdef mutable struct FredkinPBCTrajectory <: SpinHalfTrajectory
@@ -73,7 +73,7 @@ end
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
-    zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
+    # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
 @kwdef mutable struct AKLTPBCTrajectory <: SpinOneTrajectory

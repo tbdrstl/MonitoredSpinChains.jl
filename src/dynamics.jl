@@ -64,18 +64,18 @@ function meas!(traj::Trajectory, site::Int)
 end
 
 function correct!(traj::SU2Trajectory, site::Int)
-    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
+    controlPsiZ!(traj.state, traj.circuit.L,site)
 end
 
 function correct!(traj::SU2PBCTrajectory, site::Int)
-    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
+    controlPsiZ!(traj.state, traj.circuit.L,site)
 end
 
 function correct!(traj::FredkinTrajectory, site::Int)
     L = Int(log2(length(traj.state)))
     # correct the state
     if site < L-1
-        controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
+        controlPsiZ!(traj.state, traj.circuit.L,site)
     elseif site == L-1
         traj.state .= (X ⊗ speye(2^(L-1))) * traj.state
     elseif site == L
@@ -89,7 +89,7 @@ end
 function correct!(traj::FredkinPBCTrajectory, site::Int)
     # correct the state
     site = mod1(site+1, traj.circuit.L)
-    controlPsiZ!(traj.state, traj.zFeedbackIndices[site])
+    controlPsiZ!(traj.state, traj.circuit.L,site)
 
     return 
 end
@@ -135,6 +135,18 @@ function correct!(traj::MotzkinPBCTrajectory, site::Int)
     traj.state .= (speye(3^(site-1)) ⊗ exp_z1 ⊗ speye(3^(L-site))) * traj.state
 end
 
-function controlPsiZ!(state::AbstractVector{T}, feedbackIndices::Vector{I}) where {I<:Integer, T<:Union{Float64, ComplexF64}}
-    timesMinusOne!(state, feedbackIndices)
+# function controlPsiZ!(state::AbstractVector{T}, feedbackIndices::Vector{I}) where {I<:Integer, T<:Union{Float64, ComplexF64}}
+#     timesMinusOne!(state, feedbackIndices)
+# end
+
+function controlPsiZ!(state::AbstractVector{T}, L::Int, site::Int) where {T<:Union{Float64, ComplexF64}}
+    N = length(state)
+
+    bit_pos = L - site
+    # control the state with Z1
+    for i in 0:N-1
+        if (i >> bit_pos) & 1 == 1
+            state[i+1] *= -1.0  # Julia uses 1-based indexing
+        end
+    end
 end

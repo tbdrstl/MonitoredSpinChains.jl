@@ -197,9 +197,9 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
             trajectories[end].projectors = get_projectors(circuit)
         end
 
-        if feedbackIdx
-            trajectories[end].zFeedbackIndices = feedbackIndices(circuit)
-        end
+        # if feedbackIdx
+        #     trajectories[end].zFeedbackIndices = feedbackIndices(circuit)
+        # end
 
     end
     return trajectories
@@ -287,9 +287,9 @@ function compute_missing_parameters!(traj::SpinHalfTrajectory)
         traj.state = traj.circuit.initialState(traj.circuit.L)
     end
 
-    if ismissing(traj.zFeedbackIndices)
-        traj.zFeedbackIndices = feedbackIndices(traj.circuit)
-    end
+    # if ismissing(traj.zFeedbackIndices)
+    #     traj.zFeedbackIndices = feedbackIndices(traj.circuit)
+    # end
 
     return 
 end

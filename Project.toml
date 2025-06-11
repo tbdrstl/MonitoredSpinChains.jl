@@ -1,7 +1,7 @@
 name = "MonitoredSpinChains"
 uuid = "3dd0d50f-2b6a-4c40-8fcf-6320226936db"
 authors = ["Tobias Doerstel <tobias.doerstel@gmail.com>"]
-version = "1.1.1-DEV"
+version = "1.1.2-DEV"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"

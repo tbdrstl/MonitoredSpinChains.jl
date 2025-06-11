@@ -5,9 +5,9 @@ import MonitoredSpinChains: mpiexec
 
 
 
-nworker = 17
+# nworker = 16
 
-p = run(`$(mpiexec()) -n $nworker $(Base.julia_cmd()) full_sim.jl`)
+# p = run(`$(mpiexec()) -n $nworker $(Base.julia_cmd()) --check-bounds=no full_sim.jl`)
 
 include("normalization.jl")
 # include("full_sim.jl")

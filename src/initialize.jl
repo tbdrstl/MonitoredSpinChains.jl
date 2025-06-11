@@ -1,14 +1,14 @@
 export compute_anomalous_groundstates
 
 
-function get_proj_fredkin(L::Int)
+function get_proj_fredkin(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
     projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
     push!(projectors, proj(down)⊗speye(2^(L-1)))
     push!(projectors, speye(2^(L-1))⊗proj(up))
     return projectors
 end
 
-function get_proj_fredkin_pbc(L::Int)
+function get_proj_fredkin_pbc(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
     projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
     
     pbc_proj = (speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25 
@@ -18,14 +18,14 @@ function get_proj_fredkin_pbc(L::Int)
     return vcat(projectors, [site_Lminus1, site_L])
 end
 
-function get_proj_motzkin(L::Int)
+function get_proj_motzkin(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
     projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
     push!(projectors, proj(down1)⊗speye(3^(L-1)))
     push!(projectors, speye(3^(L-1))⊗proj(up1))
     return projectors
 end
 
-function get_proj_motzkin_pbc(L::Int)
+function get_proj_motzkin_pbc(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
     projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
     
     P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3') # auto switch sites (1 and L) and use braket notation |v1v2><v3v4|
@@ -72,7 +72,7 @@ function get_proj_aklt(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{Comple
     return projectors
 end
 
-function get_projectors(circuit::Circuit)
+function get_projectors(circuit::Circuit) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
     trajtype = determine_trajectory(circuit)
     L = circuit.L
 

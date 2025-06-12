@@ -27,7 +27,7 @@ function rand_spinone_real(L::Int)
     return psi ./ norm(psi)
 end
 
-function neelState(L::Int64) :: AbstractVector{Float64}
+function neelState(L::Int64) :: AbstractVector{ComplexF64}
     L == 0 && return [one(ComplexF64)]
     psi = down 
     
@@ -39,7 +39,7 @@ function neelState(L::Int64) :: AbstractVector{Float64}
         end
     end
 
-    return psi |> Vector{Float64}
+    return psi |> Vector{ComplexF64}
 end
 
 function flat_spin1(L::Int)

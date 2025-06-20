@@ -4,12 +4,24 @@ average_trajectories_from_collect
 
 # save trajectory to file only every 10th timestep to avoid IO overhead
 function save_trajectory(traj::Trajectory)
-    if traj.current_timestep >= traj.circuit.meas_steps*traj.circuit.meas_every
+    if traj.current_timestep > traj.circuit.meas_steps*traj.circuit.meas_every
         save_traj(traj)
     end
     # do not save small trajectories inbetween. They run very fast anyways
     if traj.circuit.L > 12 && traj.current_timestep % 30 == 0
         save_traj(traj)
+    end
+end
+
+function move_to_computed_folder(traj::Trajectory)
+    file = trajectory_to_filename(traj)
+    if isfile(file)
+        # move file to already_computed folder
+        new_file = joinpath(traj.circuit.result_folder, "already_computed", basename(file))
+        if !isdir(joinpath(traj.circuit.result_folder, "already_computed"))
+            mkdir(joinpath(traj.circuit.result_folder, "already_computed"))
+        end
+        mv(file, new_file)
     end
 end
 
@@ -76,6 +88,8 @@ function remove_excess_data!(traj::Trajectory)
     traj.projectors = missing
     remove_excess_data_specialized!(traj)
     save_trajectory(traj)
+    # avoid having too many trajectories in the actively used folder
+    move_to_computed_folder(traj)
     traj.observables = missing
 end
 
@@ -88,21 +102,25 @@ function trajectory_to_filename(traj::Trajectory) ::String
     return joinpath(traj.circuit.result_folder, filename)
 end
 
-function circuit_to_filename(circuit::Circuit; average::Bool=false) ::String
+function circuit_to_filename(circuit::Circuit; average::Bool=false, final::Bool=false) ::String
     filename = string(hash(circuit)) * ".jld2"
 
     if average
         return joinpath(circuit.result_folder, "average", filename)
+    elseif final
+        return joinpath(circuit.result_folder, "already_computed", filename)
     else
         return joinpath(circuit.result_folder, filename)
     end
 end
 
-function circuit_to_filename(circuit::Circuit, trajID::Int64; average::Bool=false) ::String
+function circuit_to_filename(circuit::Circuit, trajID::Int64; average::Bool=false, final::Bool=false) ::String
     filename = string(hash(circuit, trajID)) * ".jld2"
 
     if average
         return joinpath(circuit.result_folder, "average", filename)
+    elseif final
+        return joinpath(circuit.result_folder, "already_computed", filename)
     else
         return joinpath(circuit.result_folder, filename)
     end
@@ -123,11 +141,11 @@ function collect_data(sim::Simulation)
 end
 
 function collect_data(circuit::Circuit)
-    file = circuit_to_filename(circuit)
+    file = joinpath(circuit.result_folder, "already_computed", basename(circuit_to_filename(circuit)))
 
     jldopen(file,"a+") do f
         for trajID in 1:circuit.average
-            file1 = circuit_to_filename(circuit, trajID)
+            file1 = circuit_to_filename(circuit, trajID, final=true)
             observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
             if !haskey(f, string(hash(circuit, trajID)))
                 f[string(hash(circuit, trajID))] = observables
@@ -161,13 +179,13 @@ end
 
 function average_trajectories(circuit::Circuit)
 
-    file1 = circuit_to_filename(circuit, 1)
+    file1 = circuit_to_filename(circuit, 1; final=true)
     
     observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
     obs2 = deepcopy(observables)
     square!(obs2)
     for trajID in 2:circuit.average
-        file = circuit_to_filename(circuit, trajID)
+        file = circuit_to_filename(circuit, trajID; final=true)
         if isfile(file)
             obs = load(file, "observables")
             add!(observables, obs)
@@ -198,7 +216,7 @@ function average_trajectories_from_collect(circuit::Circuit)
     if !isdir(joinpath(circuit.result_folder, "average"))
         mkdir(joinpath(circuit.result_folder, "average"))
     end
-    file1 = circuit_to_filename(circuit)
+    file1 = circuit_to_filename(circuit; final=true)
     jldopen(file1,"r") do f
         observables = f[string(hash(circuit, 1))]
         obs2 = deepcopy(observables)
@@ -253,7 +271,7 @@ end
 
 function remove_single_trajectories(circ::Circuit)
     for trajID in 1:circ.average
-        file = circuit_to_filename(circ, trajID)
+        file = circuit_to_filename(circ, trajID; final=true)
         if isfile(file)
             rm(file)
         end

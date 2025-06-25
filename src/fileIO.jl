@@ -126,19 +126,27 @@ function circuit_to_filename(circuit::Circuit, trajID::Int64; average::Bool=fals
     end
 end
 
-function collect_data(sim::Simulation)
-    if !isdir(joinpath(sim.params[1].result_folder, "average"))
-        mkdir(joinpath(sim.params[1].result_folder, "average"))
-    end
+# function collect_data(sim::Simulation)
+#     if !isdir(joinpath(sim.params[1].result_folder, "average"))
+#         mkdir(joinpath(sim.params[1].result_folder, "average"))
+#     end
 
-    for circuit in sim.params
+#     for circuit in sim.params
+#         collect_data(circuit)
+#         if circuit.trajectories_averaged == true
+#             average_trajectories(circuit)
+#         end
+#         # remove_single_trajectories(circuit) 
+#     end
+# end
+function collect_data(sim::Simulation)
+    circs = sim.params
+    for circuit in circs
         collect_data(circuit)
-        if circuit.trajectories_averaged == true
-            average_trajectories(circuit)
-        end
-        remove_single_trajectories(circuit) 
     end
+    return 
 end
+
 
 function collect_data(circuit::Circuit)
     file = joinpath(circuit.result_folder, "already_computed", basename(circuit_to_filename(circuit)))

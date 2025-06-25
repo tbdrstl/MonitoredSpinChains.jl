@@ -40,6 +40,7 @@ function simulate(sim::Simulation)
             run_trajectory!(t)
         end
         collect_data(sim)
+        average_trajectories_from_collect(sim)
         println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
 
         MPI.Finalize()

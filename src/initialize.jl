@@ -184,11 +184,20 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
     
     for trajectoryID in 1:circuit.average
         traj_type = determine_trajectory(circuit)
-        push!(trajectories, traj_type(  trajectoryID = trajectoryID,
+        traj = traj_type(  trajectoryID = trajectoryID,
                                         circuit = circuit,
                                         current_timestep = current_timestep,
                                         thermalized = thermalized,
-                                        observables = observables))
+                                        observables = observables)
+        # check if trajectory has already been computed
+        file = trajectory_to_filename(traj)
+        computed_file = joinpath(traj.circuit.result_folder, "already_computed", basename(file))
+        @show isfile(computed_file)
+        if !isfile(computed_file)
+            push!(trajectories, traj)
+        else
+            continue
+        end
         if state
             trajectories[end].state = circuit.initialState(circuit.L)
         end

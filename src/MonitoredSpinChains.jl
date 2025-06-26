@@ -7,7 +7,8 @@ module MonitoredSpinChains
     using UnPack
     using MPI
     using MKL
-    import Combinatorics: combinations
+    import Combinatorics: combinations, multiset_permutations
+    import Combinat: multisets, nmultisets
     import ProgressMeter: @showprogress
     import Base: hash
     import Pkg: dependencies
@@ -36,5 +37,6 @@ module MonitoredSpinChains
     include("initialize.jl")
     include("initialStates.jl")
     include("fileIO.jl")
+    include("analysis.jl")
 
 end

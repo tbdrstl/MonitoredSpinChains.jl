@@ -72,6 +72,26 @@ function get_proj_aklt(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{Comple
     return projectors
 end
 
+function get_proj0_aklt(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    proj0 = 1/sqrt(3)*(up1⊗down1 - flat1 ⊗ flat1 + down1⊗up1)
+    proj0 = proj(proj0)
+    projectors = [speye(3^(site-1)) ⊗ proj0 ⊗ speye(3^(L-site-1)) for site in 1:L-1]
+    
+    if pbc 
+        # helper
+        u = up1; d = down1; f = flat1
+        P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3') # auto switch sites (1 and L) and use braket notation |v1v2><v3v4|
+        P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
+
+        phi0 = (P(u,d) + P(d,u) + P(f,f) + P(u,d,d,u) + P(d,u,u,d) 
+            - P(u,d,f,f) - P(d,u,f,f) - P(f,f,u,d) - P(f,f,d,u))/3.0
+
+        
+        return vcat(projectors, [phi0])
+    end
+    return projectors
+end
+
 function get_projectors(circuit::Circuit) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
     trajtype = determine_trajectory(circuit)
     L = circuit.L

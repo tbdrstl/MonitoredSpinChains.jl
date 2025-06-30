@@ -133,7 +133,7 @@ function generalized_dicke(L::Int, d::Int)
     dicke_states = [spzeros(Float64,d^L) for _ in 1:nmultisets(0:d-1, L)]
     for (ind,m) in enumerate(multisets(0:d-1, L))
         mp = multiset_permutations(m,L)
-        for state_bits in mp
+        @showprogress for state_bits in mp
             dicke_states[ind] .+= state_bits_to_vector_general(state_bits,d)
         end
         dicke_states[ind] ./= sqrt(length(mp))

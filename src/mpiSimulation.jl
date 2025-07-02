@@ -19,15 +19,15 @@ function simulate(sim::Simulation)
     MPI.Barrier(comm)
 
     # if simulation has been computed before (ntrajectories == 0) inform and exit
-    if ntrajectories == 0
+    # if ntrajectories == 0
 
-        if rank == root
-            printstyled("Simulation has been computed before. Check $(normpath(sim.params_dict["result_folder"])) for results. Exiting..."; color=:reverse)
-        end
-        MPI.Barrier(comm)
-        MPI.Finalize()
-        return
-    end
+    #     if rank == root
+    #         printstyled("Simulation has been computed before. Check $(normpath(sim.params_dict["result_folder"])) for results. Exiting..."; color=:reverse)
+    #     end
+    #     MPI.Barrier(comm)
+    #     MPI.Finalize()
+    #     return
+    # end
 
     MPI.Barrier(comm)
     if rank == root

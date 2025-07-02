@@ -163,6 +163,20 @@ function collect_data(circuit::Circuit)
     remove_single_trajectories(circuit)
 end
 
+function collect_data_incomplete_ramses(circuit::Circuit)
+    file = joinpath(circuit.result_folder, "already_computed", basename(MonitoredSpinChains.circuit_to_filename(circuit)))
+
+    jldopen(file,"a+") do f
+        for trajID in 1:circuit.average
+            file1 = MonitoredSpinChains.circuit_to_filename(circuit, trajID)
+            observables = try load(file1, "observables"); catch e; continue end
+            if !haskey(f, string(hash(circuit, trajID)))
+                f[string(hash(circuit, trajID))] = observables
+            end
+        end
+    end
+end
+
 function save_parameter_file(params::Dict)
     if !ispath(params["result_folder"])
         mkpath(params["result_folder"])

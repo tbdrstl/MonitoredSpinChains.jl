@@ -167,9 +167,9 @@ function collect_data_incomplete_ramses(circuit::Circuit)
     file = joinpath(circuit.result_folder, "already_computed", basename(MonitoredSpinChains.circuit_to_filename(circuit)))
 
     jldopen(file,"a+") do f
-        for trajID in 1:circuit.average
-            file1 = MonitoredSpinChains.circuit_to_filename(circuit, trajID)
-            observables = try load(file1, "observables"); catch e; continue end
+        @showprogress for trajID in 1:circuit.average
+            file1 = MonitoredSpinChains.circuit_to_filename(circuit, trajID, final=true)
+            observables = try load(file1, "observables"); catch e; println(e); continue end
             if !haskey(f, string(hash(circuit, trajID)))
                 f[string(hash(circuit, trajID))] = observables
             end
@@ -260,6 +260,32 @@ function average_trajectories_from_collect(circuit::Circuit)
     end
     return
 end
+
+#=
+begin 
+    observables = f[string(hash(circs[1],1))]
+    obs2 = deepcopy(observables)
+    obs2 = square!(obs2)
+    @showprogress for id in 2:circs[1].average
+        try
+            obs = f[string(hash(circs[1], id))]
+            add!(observables, obs)
+            square!(obs)
+            add!(obs2, obs)
+            i+=1
+        catch e
+            continue
+        end
+    end
+    divide!(observables, length(f))
+    divide!(obs2, length(f))
+    
+    obstothe2 = deepcopy(observables)
+    square!(obstothe2)
+
+    errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(length(f)))
+end
+=#
 
 function average_trajectories_from_collect(sim::Simulation)
     if !isdir(joinpath(sim.params[1].result_folder, "average"))

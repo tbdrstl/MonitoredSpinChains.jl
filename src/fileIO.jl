@@ -169,7 +169,7 @@ function collect_data_incomplete_ramses(circuit::Circuit)
     jldopen(file,"a+") do f
         @showprogress for trajID in 1:circuit.average
             file1 = MonitoredSpinChains.circuit_to_filename(circuit, trajID, final=true)
-            observables = try load(file1, "observables"); catch e; println(e); continue end
+            observables = try load(file1, "observables"); catch e; continue end
             if !haskey(f, string(hash(circuit, trajID)))
                 f[string(hash(circuit, trajID))] = observables
             end

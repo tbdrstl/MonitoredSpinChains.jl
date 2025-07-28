@@ -261,6 +261,45 @@ function average_trajectories_from_collect(circuit::Circuit)
     return
 end
 
+function average_trajectories_from_collect_incomplete(circuit::Circuit)
+    if !isdir(joinpath(circuit.result_folder, "average"))
+        mkdir(joinpath(circuit.result_folder, "average"))
+    end
+    file1 = circuit_to_filename(circuit; final=true)
+    jldopen(file1,"r") do f
+        len = length(f)
+        startind = 1
+        for i in 1:len
+            if !haskey(f, string(hash(circuit, i)))
+                continue
+            end
+            startind = i
+        end
+        observables = f[string(hash(circuit, startind))]
+        obs2 = deepcopy(observables)
+        obs2 = square!(obs2)
+        for id in startind+1:circuit.average
+            try 
+                obs = f[string(hash(circuit, id))]
+                add!(observables, obs)
+                square!(obs)
+                add!(obs2, obs)
+            catch e
+                continue
+            end
+        end
+        divide!(observables, len)
+        divide!(obs2, len)
+
+        obstothe2 = deepcopy(observables)
+        square!(obstothe2)
+
+        errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(len))
+        jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
+    end
+    return
+end
+
 #=
 begin 
     observables = f[string(hash(circs[1],1))]

@@ -43,6 +43,22 @@ function neelState(L::Int64) :: AbstractVector{ComplexF64}
     return psi |> Vector{ComplexF64}
 end
 
+function neelState1(L::Int) :: AbstractArray{ComplexF64}
+    @assert L >= 0 "L must be non-negative"
+    if L == 0
+        return [one(ComplexF64)]
+    end
+    psi = down1
+    for i in 1:L-1
+        if iseven(i)
+            psi = psi ⊗ down1
+        else
+            psi = psi ⊗ up1
+        end
+    end
+    return Vector{ComplexF64}(psi)
+end
+
 function flat_spin1(L::Int)
     L == 1 && return flat1
     return flat_spin1(L-1) ⊗ flat1 |> Vector{ComplexF64}
@@ -121,6 +137,14 @@ function state_bits_to_vector(state_bits::Vector{Int})
     return res
 end
 
+function load_dicke(L::Int,k::Int) ::AbstractVector{Float64}
+    psi = Vector{Float64}(undef, 2^L)
+    open(joinpath(dickestatepath,"dickeStateX_L$(L)_l$(k).bin")) do file
+        read!(file, psi)
+    end
+    return psi
+end
+
 function load_anomalous(L::Int) ::AbstractVector{Float64}
     psi = Vector{Float64}(undef, 2^L)
     open(joinpath(anomalousstatepath,"anomalousGS$L.bin")) do file
@@ -129,22 +153,50 @@ function load_anomalous(L::Int) ::AbstractVector{Float64}
     return psi
 end
 
+"""
+    function generalized_dicke(L::Int, d::Int)
+
+    # Arguments
+    L::Int: Length of the chain
+    d::Int: Dimension of the spin (e.g., 3 for spin-1)
+
+    Generates all Dicke states of a spin chain of length `L` with 
+    `d` spin degree of freedom.
+"""
 function generalized_dicke(L::Int, d::Int)
     dicke_states = [spzeros(Float64,d^L) for _ in 1:nmultisets(0:d-1, L)]
     for (ind,m) in enumerate(multisets(0:d-1, L))
         mp = multiset_permutations(m,L)
-        @showprogress for state_bits in mp
-            dicke_states[ind] .+= state_bits_to_vector_general(state_bits,d)
+        @showprogress desc="Computing Dicke..." for state_bits in mp
+            dicke_states[ind] .+= _state_bits_to_vector_general(state_bits,d)
         end
         dicke_states[ind] ./= sqrt(length(mp))
     end
     return dicke_states
 end
 
-function state_bits_to_vector_general(state_bits,d::Int)
+function _state_bits_to_vector_general(state_bits,d::Int)
     res = sparsevec(Dict(state_bits[1]+1=>1.), d)
     for i in 2:length(state_bits)
         res = res ⊗ sparsevec(Dict(state_bits[i]+1=>1), d)
     end
     return res
 end
+
+"""
+    function fredkin_stationary_state(L::Int)
+
+    Generates the stationary state of the Fredkin model for a given system size `L`.
+    The state is the antisymmetric superposition of the z=0 Dicke state and the anom-
+    alous state. 
+"""
+function fredkin_stationary_state(L::Int)
+    @assert iseven(L) "L must be even"
+    a = anomalous_ground_state(L)
+    d = generalized_dicke(L, 2)[div(L,2)+1]
+
+    state = (a .- d) ./ sqrt(2)
+    return state
+end
+
+f_stat_ent(L) = entanglement_entropy_general(fredkin_stationary_state(L), 1:div(L,2))

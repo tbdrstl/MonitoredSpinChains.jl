@@ -96,3 +96,4 @@ const required_params = [   "name",
                             "model"]
 
 const anomalousstatepath = joinpath(homedir(),".julia/data/fredkin_pbc_anomalous_ground_states")
+const dickestatepath = joinpath(homedir(),".julia/data/dickeStates")

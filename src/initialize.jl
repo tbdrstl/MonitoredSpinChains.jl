@@ -128,24 +128,24 @@ function get_proj0_aklt(L::Int64; pbc::Bool=true, ancilla::Bool=false) ::Vector{
     end
 end
 
-function get_projectors(circuit::Circuit) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
+function get_projectors(circuit::Circuit; ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
     trajtype = determine_trajectory(circuit)
     L = circuit.L
 
     if trajtype == FredkinPBCTrajectory
-        projectors = get_proj_fredkin_pbc(L)
+        projectors = get_proj_fredkin_pbc(L; ancilla=ancilla)
     elseif trajtype == FredkinTrajectory
-        projectors = get_proj_fredkin(L)
+        projectors = get_proj_fredkin(L; ancilla=ancilla)
     elseif trajtype == MotzkinPBCTrajectory
-        projectors = get_proj_motzkin_pbc(L)
+        projectors = get_proj_motzkin_pbc(L; ancilla=ancilla)
     elseif trajtype == MotzkinTrajectory
-        projectors = get_proj_motzkin(L)
+        projectors = get_proj_motzkin(L; ancilla=ancilla)
     elseif trajtype == SU2PBCTrajectory
-        projectors = get_proj_su2(L; pbc=true)
+        projectors = get_proj_su2(L; pbc=true, ancilla=ancilla)
     elseif trajtype == SU2Trajectory
-        projectors = get_proj_su2(L; pbc=false)
-    elseif trajtype == AKLTPBCTrajectory
-        projectors = get_proj_aklt(L)
+        projectors = get_proj_su2(L; pbc=false, ancilla=ancilla)
+    elseif trajtype == BiquadraticPBCTrajectory
+        projectors = get_proj_aklt(L; ancilla=ancilla)
     else
         error("Unknown trajectory type.")
     end
@@ -237,6 +237,7 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
     observables = get_observables(circuit)
     current_timestep = 1
     thermalized = ifelse(circuit.thermalizationSteps == 0, true, false)
+    ancilla = (:AE in circuit.observables)
     
     for trajectoryID in 1:circuit.average
         traj_type = determine_trajectory(circuit)
@@ -254,11 +255,11 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
             continue
         end
         if state
-            trajectories[end].state = circuit.initialState(circuit.L)
+            trajectories[end].state = circuit.initialState(circuit.L; ancilla=ancilla)
         end
 
         if projectors
-            trajectories[end].projectors = get_projectors(circuit)
+            trajectories[end].projectors = get_projectors(circuit; ancilla=ancilla)
         end
 
         # if feedbackIdx
@@ -280,7 +281,7 @@ function determine_trajectory(circuit::Circuit)
         traj_type += 3
     elseif circuit.model == "su2"
         traj_type += 5
-    elseif circuit.model == "aklt"
+    elseif circuit.model == "biquadratic"
         traj_type += 7
     else
         error("Unknown model type: $(circuit.model)")
@@ -308,9 +309,9 @@ function determine_trajectory(circuit::Circuit)
     elseif traj_type == 6
         return ancilla ? SU2PBCTrajectoryA : SU2PBCTrajectory
     elseif traj_type == 7
-        error("AKLT only supports PBC")
+        error("Biquadratic only supports PBC")
     elseif traj_type == 8
-        return ancilla ? BIQUADRATICPBCTrajectoryA : AKLTPBCTrajectory
+        return ancilla ? BiquadraticPBCTrajectoryA : BiquadraticPBCTrajectory
     else
         error("Assertion of trajectory type failed.")
     end
@@ -334,7 +335,8 @@ end
 
 function compute_missing_parameters!(traj::SpinOneTrajectory)
     if ismissing(traj.projectors)
-        traj.projectors = get_projectors(traj.circuit)
+        ancilla = (:AE in traj.circuit.observables)
+        traj.projectors = get_projectors(traj.circuit; ancilla=ancilla)
     end
 
     if ismissing(traj.state)
@@ -345,12 +347,19 @@ function compute_missing_parameters!(traj::SpinOneTrajectory)
 end
 
 function compute_missing_parameters!(traj::SpinHalfTrajectory)
+    ancilla = (:AE in traj.circuit.observables) 
     if ismissing(traj.projectors)
-        traj.projectors = get_projectors(traj.circuit)
+        traj.projectors = get_projectors(traj.circuit; ancilla=ancilla)
     end
 
     if ismissing(traj.state)
-        traj.state = traj.circuit.initialState(traj.circuit.L)
+        try 
+            traj.state = traj.circuit.initialState(traj.circuit.L; ancilla=ancilla)
+        catch e
+            @warn("No Ancilla version available for this initial state: ", string(traj.circuit.initialState))
+            @warn("Trying to continue anyways ...")
+            traj.state = traj.circuit.initialState(traj.circuit.L)
+        end
     end
 
     # if ismissing(traj.zFeedbackIndices)
@@ -379,8 +388,9 @@ function feedbackIndices(circuit::Circuit)::Vector{Vector{Int32}}
     for site in eachindex(1:L)
         onesDiagonal = diag(speye(2^(site-1)) ⊗ Int32.([1 0; 0 -1]) ⊗ speye(2^(L-site)))
         
-        if :AncillaMutualInformation in circuit.observables
-            onesDiagonal = diag(onesDiagonal ⊗ speye(4))
+        # encouter ancilla observables
+        if :AE in circuit.observables
+            onesDiagonal = diag(onesDiagonal ⊗ speye(2))
         end
         
         feedbackIndices[site] = findall(!isone, onesDiagonal)

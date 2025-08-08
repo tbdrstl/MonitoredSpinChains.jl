@@ -22,12 +22,20 @@ module MonitoredSpinChains
             FredkinPBCTrajectory,
             MotzkinTrajectory,
             MotzkinPBCTrajectory,
+            BiquadraticPBCTrajectory,
+            SU2Trajectory,
+            SU2PBCTrajectory,
+            SU2PBCTrajectoryA,
+            FredkinTrajectoryA,
+            MotzkinTrajectoryA,
+            BiquadraticPBCTrajectoryA,
             create_simulation,
             simulate,
             get_trajectories_from_simulation,
             get_trajectories_from_circuit,
             get_projectors,
-            ⊗
+            ⊗, 
+            speye
 
     include("struct.jl")
     include("constants.jl")

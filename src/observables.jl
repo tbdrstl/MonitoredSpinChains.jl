@@ -10,7 +10,7 @@ function get_observables!(traj::Trajectory)
         obs == :EE && (traj.observables.entanglement_entropy[current_meas_step] = entanglement_entropy_general(traj,1:div(traj.circuit.L,2)))
         obs == :M && (traj.observables.magnetization[current_meas_step, :] .= magnetization(traj))
         obs == :MX && (traj.observables.magnetizationX[current_meas_step, :] .= magnetizationX(traj))
-        obs == :AE && (traj.observables.ancilla_entropy[current_meas_step] = entanglement_entropy_general(traj,[L+1]))
+        obs == :AE && (traj.observables.ancilla_entropy[current_meas_step] = entanglement_entropy_general(traj,[1]))
 
         if obs == :EEfin && traj.current_timestep == traj.circuit.meas_steps*traj.circuit.meas_every
             # Calculate the entanglement entropy for the final state
@@ -78,7 +78,7 @@ function entanglement_entropy_general(psi::AbstractVector{T}, A::AbstractVector{
     B = setdiff(1:n, A)
     
     # Create a permutation to reorder the qubits such that A comes first, then B
-    perm = vcat(A, B)
+    perm = vcat(A,B)
     
     # Reshape psi into an n-dimensional tensor with each dimension of size 2
     reshaped_psi = reshape(psi, ntuple(_ -> 2, n))

@@ -5,7 +5,8 @@ export rand_spinhalf_im,
         neelState,
         anomalous_ground_state,
         flat_spin1,
-        generalized_dicke
+        generalized_dicke, 
+        all_plus
 
 
 function rand_spinhalf_im(L::Int)
@@ -55,6 +56,26 @@ function neelState1(L::Int) :: AbstractArray{ComplexF64}
         else
             psi = psi ⊗ up1
         end
+    end
+    return Vector{ComplexF64}(psi)
+end
+
+function all_plus(L::Int; ancilla::Bool=false)
+    @assert L >= 0 "L must be non-negative"
+    if L == 0
+        return [one(ComplexF64)]
+    elseif L == 1
+        return plus
+    end
+
+    psi = plus
+    for i in 1:L-2
+        psi = psi ⊗ plus
+    end
+    if ancilla 
+        psi = psi ⊗ singlet
+    else
+        psi = psi ⊗ plus
     end
     return Vector{ComplexF64}(psi)
 end

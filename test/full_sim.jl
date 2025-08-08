@@ -2,20 +2,20 @@ using MonitoredSpinChains
 
 
 params = Dict(
-    "name" => "motzkin",
-    "systemSize" => 6:2:14,
-    "meas_steps" => [x->1],
-    "average" => [1],
+    "name" => "su2 ae test",
+    "systemSize" => 8,
+    "meas_steps" => [x->1000],
+    "average" => [100],
     "bc" => [:pbc],
-    "initialState" => [flat_spin1],
+    "initialState" => [all_plus],
     "measurement" => [true],
     "feedback" => [:Z],
     "result_folder" => joinpath(@__DIR__, "..", "test/test_data"),
-    "observables" => [:OP,:EEfin],
+    "observables" => [:AE],
     "trajectories_averaged" => [true],
-    "thermalizationSteps" => [x->x^4],
+    "thermalizationSteps" => [x->0],
     "meas_every" => [x->1],
-    "model" => ["aklt"],
+    "model" => ["biquadratic"],
 )
 
 mkpath(params["result_folder"])
@@ -28,11 +28,11 @@ simulate(sim)
 #=
 
 
-f1_h1 = load("./data/aklt/FinalEntanglement/2814621704739593187.jld2");
-f2_h1 = load("./data/aklt/FinalEntanglement/5431095733213027281.jld2");
-f3_h1 = load("./data/aklt/FinalEntanglement/7859136725201680207.jld2");
-f4_h1 = load("./data/aklt/FinalEntanglement/9717952960700774922.jld2");
-f5_h1 = load("./data/aklt/FinalEntanglement/14576885274364748225.jld2");
+f1_h1 = load("./data/biquadratic/FinalEntanglement/2814621704739593187.jld2");
+f2_h1 = load("./data/biquadratic/FinalEntanglement/5431095733213027281.jld2");
+f3_h1 = load("./data/biquadratic/FinalEntanglement/7859136725201680207.jld2");
+f4_h1 = load("./data/biquadratic/FinalEntanglement/9717952960700774922.jld2");
+f5_h1 = load("./data/biquadratic/FinalEntanglement/14576885274364748225.jld2");
 
 obs1_h1 = f1_h1["observables"];
 obs2_h1 = f2_h1["observables"];

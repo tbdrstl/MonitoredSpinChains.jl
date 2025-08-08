@@ -66,7 +66,7 @@ pa = Dict(
     "trajectories_averaged" => [true],
     "thermalizationSteps" => [x->0],
     "meas_every" => [x->1],
-    "model" => ["aklt"],
+    "model" => ["biquadratic"],
 )
 
 mkpath(pa["result_folder"])

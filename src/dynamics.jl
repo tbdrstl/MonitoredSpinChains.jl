@@ -94,7 +94,7 @@ function correct!(traj::FredkinPBCTrajectory, site::Int)
     return 
 end
 
-function correct!(traj::AKLTPBCTrajectory, site::Int)
+function correct!(traj::BiquadraticPBCTrajectory, site::Int)
     L = traj.circuit.L
     # correct the state
     # if rand(Bool) # correct with Z
@@ -133,6 +133,29 @@ function correct!(traj::MotzkinPBCTrajectory, site::Int)
     L = traj.circuit.L
     # correct the state
     traj.state .= (speye(3^(site-1)) ⊗ exp_z1 ⊗ speye(3^(L-site))) * traj.state
+end
+
+function correct!(traj::SU2PBCTrajectoryA, site::Int)
+    # Same as SU2Trajectory, but state has ancilla at the end (do not act on ancilla)
+    controlPsiZ!(traj.state, traj.circuit.L, site)
+end
+
+function correct!(traj::FredkinPBCTrajectoryA, site::Int)
+    # Same as FredkinPBCTrajectory, but state has ancilla at the end (do not act on ancilla)
+    site = mod1(site+1, traj.circuit.L)
+    controlPsiZ!(traj.state, traj.circuit.L, site)
+end
+
+function correct!(traj::MotzkinPBCTrajectoryA, site::Int)
+    # Same as MotzkinPBCTrajectory, but state has ancilla at the end (do not act on ancilla)
+    L = traj.circuit.L
+    traj.state .= (speye(3^(site-1)) ⊗ exp_z1 ⊗ speye(3^(L-site+1))) * traj.state
+end
+
+function correct!(traj::BiquadraticPBCTrajectoryA, site::Int)
+    # Same as BiquadraticPBCTrajectory, but state has ancilla at the end (do not act on ancilla)
+    L = traj.circuit.L
+    traj.state .= (speye(3^(site-1)) ⊗ exp_z1 ⊗ speye(3^(L-site+1))) * traj.state
 end
 
 # function controlPsiZ!(state::AbstractVector{T}, feedbackIndices::Vector{I}) where {I<:Integer, T<:Union{Float64, ComplexF64}}

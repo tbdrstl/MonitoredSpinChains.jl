@@ -77,7 +77,7 @@ end
     # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
-@kwdef mutable struct AKLTPBCTrajectory <: SpinOneTrajectory
+@kwdef mutable struct BiquadraticPBCTrajectory <: SpinOneTrajectory
     trajectoryID    ::Int64
     circuit         ::Circuit
     current_timestep::Int64
@@ -137,7 +137,7 @@ end
     projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
 end
 
-@kwdef mutable struct BIQUADRATICPBCTrajectoryA <: SpinOneTrajectory
+@kwdef mutable struct BiquadraticPBCTrajectoryA <: SpinOneTrajectory
     trajectoryID    ::Int64
     circuit         ::Circuit
     current_timestep::Int64

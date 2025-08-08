@@ -77,7 +77,7 @@ const motzkin = U + D + F |> SparseMatrixCSC{Float64, Int64}
 # const sz = Diagonal([1,-1,1]) |> SparseMatrixCSC{ComplexF64, Int64}
 const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
 
-const legal_observables = [:OP, :EE, :M, :MX, :EEfin]
+const legal_observables = [:OP, :EE, :M, :MX, :EEfin, :AE]
 const legal_feedbacks = [:Id, :Z]
 const legal_models = ["fredkin", "motzkin", "su2", "aklt"]
 const required_params = [   "name", 

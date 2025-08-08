@@ -10,6 +10,7 @@ function get_observables!(traj::Trajectory)
         obs == :EE && (traj.observables.entanglement_entropy[current_meas_step] = entanglement_entropy_general(traj,1:div(traj.circuit.L,2)))
         obs == :M && (traj.observables.magnetization[current_meas_step, :] .= magnetization(traj))
         obs == :MX && (traj.observables.magnetizationX[current_meas_step, :] .= magnetizationX(traj))
+        obs == :AE && (traj.observables.ancilla_entropy[current_meas_step] = entanglement_entropy_general(traj,[L+1]))
 
         if obs == :EEfin && traj.current_timestep == traj.circuit.meas_steps*traj.circuit.meas_every
             # Calculate the entanglement entropy for the final state
@@ -32,6 +33,7 @@ function get_observables(circuit::Circuit)::Observables
         obs == :M && (observables.magnetization = zeros(circuit.meas_steps, 2))
         obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
         obs == :EEfin && (observables.entanglement_entropy = zeros(div(circuit.L,2)))
+        obs == :AE && (observables.ancilla_entropy = zeros(circuit.meas_steps))
     end
     return observables
 end

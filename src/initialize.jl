@@ -1,95 +1,131 @@
 export compute_anomalous_groundstates
 
 
-function get_proj_fredkin(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
-    projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
-    push!(projectors, proj(down)⊗speye(2^(L-1)))
-    push!(projectors, speye(2^(L-1))⊗proj(up))
-    return projectors
-end
-
-function get_proj_fredkin_pbc(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
-    projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
-    
-    pbc_proj = (speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25 
-    
-    site_Lminus1 = pbc_proj * (speye(2^(L-2)) ⊗ proj(up) ⊗ speye(2)) + proj(down) ⊗ speye(2^(L-3)) ⊗ Projector |> SparseMatrixCSC{Float64, Int64}
-    site_L = Projector ⊗ speye(2^(L-3)) ⊗ proj(up) + pbc_proj * (speye(2) ⊗ proj(down) ⊗ speye(2^(L-2))) |> SparseMatrixCSC{Float64, Int64}
-    return vcat(projectors, [site_Lminus1, site_L])
-end
-
-function get_proj_motzkin(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
-    projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
-    push!(projectors, proj(down1)⊗speye(3^(L-1)))
-    push!(projectors, speye(3^(L-1))⊗proj(up1))
-    return projectors
-end
-
-function get_proj_motzkin_pbc(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
-    projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
-    
-    P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3') # auto switch sites (1 and L) and use braket notation |v1v2><v3v4|
-    P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
-    
-    pbc_proj = 0.5*(
-        P(flat1, up1) - P(flat1, up1, up1, flat1) - P(up1, flat1, flat1, up1) + P(up1, flat1)
-    +   P(flat1, down1) + P(down1, flat1) - P(flat1, down1, down1, flat1) - P(down1, flat1, flat1, down1)
-    +   P(flat1,flat1) + P(down1,up1) - P(flat1,flat1,up1, down1) - P(up1, down1, flat1, flat1)
-    )
-    return vcat(projectors, [pbc_proj])
-end
-
-function get_proj_su2(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
-    projectors = [speye(2^(site-1))⊗ Projector ⊗speye(2^(L-site-1)) for site in 1:L-1]
-    if pbc
-        pbc_proj = [(speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25]
-        return vcat(projectors, pbc_proj)
+function get_proj_fredkin(L::Int; ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    all_proj = begin
+        projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
+        push!(projectors, proj(down)⊗speye(2^(L-1)))
+        push!(projectors, speye(2^(L-1))⊗proj(up))
+        projectors
     end
-    return projectors
+    if ancilla
+        return [proj ⊗ speye(2) for proj in all_proj]
+    else
+        return all_proj
+    end
 end
 
-function get_proj_aklt(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
-    projectors = [speye(3^(site-1)) ⊗ Proj1 ⊗ speye(3^(L-site-1)) for site in 1:L-1]
-    
-    if pbc 
-        # helper
-        u = up1; d = down1; f = flat1
-        P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3') # auto switch sites (1 and L) and use braket notation |v1v2><v3v4|
+function get_proj_fredkin_pbc(L::Int; ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    all_proj = begin
+        projectors = [speye(2^(site-1)) ⊗ fredkin ⊗ speye(2^(L-site-2)) for site in 1:L-2]
+        pbc_proj = (speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25 
+        site_Lminus1 = pbc_proj * (speye(2^(L-2)) ⊗ proj(up) ⊗ speye(2)) + proj(down) ⊗ speye(2^(L-3)) ⊗ Projector |> SparseMatrixCSC{Float64, Int64}
+        site_L = Projector ⊗ speye(2^(L-3)) ⊗ proj(up) + pbc_proj * (speye(2) ⊗ proj(down) ⊗ speye(2^(L-2))) |> SparseMatrixCSC{Float64, Int64}
+        vcat(projectors, [site_Lminus1, site_L])
+    end
+    if ancilla
+        return [proj ⊗ speye(2) for proj in all_proj]
+    else
+        return all_proj
+    end
+end
+
+function get_proj_motzkin(L::Int; ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    all_proj = begin
+        projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
+        push!(projectors, proj(down1)⊗speye(3^(L-1)))
+        push!(projectors, speye(3^(L-1))⊗proj(up1))
+        projectors
+    end
+    if ancilla
+        return [proj ⊗ speye(3) for proj in all_proj]
+    else
+        return all_proj
+    end
+end
+
+function get_proj_motzkin_pbc(L::Int; ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    all_proj = begin
+        projectors = [speye(3^(site-1)) ⊗ motzkin ⊗ speye(3^(L-site-1)) for site in 1:L-1]
+        P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3')
         P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
-
-        # basis states
-        phi2 = P(u,u)
-        phi1 = 0.5*(P(u,f) + P(f,u) + P(u,f,f,u) + P(f,u,u,f))
-        phi0 = 1/6*(P(u,d) + P(d,u) + 4*P(f,f) + P(u,d,d,u) + P(d,u,u,d) + 2*(P(u,d,f,f) + P(d,u,f,f) + P(f,f,u,d) + P(f,f,d,u)))
-        phi_1= 0.5*(P(d,f) + P(f,d) + P(d,f,f,d) + P(f,d,d,f))
-        phi_2= P(d,d)
-
-        # total projector
-        pbc_proj = speye(3^L) - (phi2 + phi1 + phi0 + phi_1 + phi_2)
-        
-        return vcat(projectors, [pbc_proj])
+        pbc_proj = 0.5*(
+            P(flat1, up1) - P(flat1, up1, up1, flat1) - P(up1, flat1, flat1, up1) + P(up1, flat1)
+        +   P(flat1, down1) + P(down1, flat1) - P(flat1, down1, down1, flat1) - P(down1, flat1, flat1, down1)
+        +   P(flat1,flat1) + P(down1,up1) - P(flat1,flat1,up1, down1) - P(up1, down1, flat1, flat1)
+        )
+        vcat(projectors, [pbc_proj])
     end
-    return projectors
+    if ancilla
+        return [proj ⊗ speye(3) for proj in all_proj]
+    else
+        return all_proj
+    end
 end
 
-function get_proj0_aklt(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
-    proj0 = 1/sqrt(3)*(up1⊗down1 - flat1 ⊗ flat1 + down1⊗up1)
-    proj0 = proj(proj0)
-    projectors = [speye(3^(site-1)) ⊗ proj0 ⊗ speye(3^(L-site-1)) for site in 1:L-1]
-    
-    if pbc 
-        # helper
-        u = up1; d = down1; f = flat1
-        P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3') # auto switch sites (1 and L) and use braket notation |v1v2><v3v4|
-        P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
-
-        phi0 = (P(u,d) + P(d,u) + P(f,f) + P(u,d,d,u) + P(d,u,u,d) 
-            - P(u,d,f,f) - P(d,u,f,f) - P(f,f,u,d) - P(f,f,d,u))/3.0
-
-        
-        return vcat(projectors, [phi0])
+function get_proj_su2(L::Int64; pbc::Bool=true, ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    all_proj = begin
+        projectors = [speye(2^(site-1))⊗ Projector ⊗speye(2^(L-site-1)) for site in 1:L-1]
+        if pbc
+            pbc_proj = [(speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25]
+            vcat(projectors, pbc_proj)
+        else
+            projectors
+        end
     end
-    return projectors
+    if ancilla
+        return [proj ⊗ speye(2) for proj in all_proj]
+    else
+        return all_proj
+    end
+end
+
+function get_proj_aklt(L::Int64; pbc::Bool=true, ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    all_proj = begin
+        projectors = [speye(3^(site-1)) ⊗ Proj1 ⊗ speye(3^(L-site-1)) for site in 1:L-1]
+        if pbc 
+            u = up1; d = down1; f = flat1
+            P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3')
+            P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
+            phi2 = P(u,u)
+            phi1 = 0.5*(P(u,f) + P(f,u) + P(u,f,f,u) + P(f,u,u,f))
+            phi0 = 1/6*(P(u,d) + P(d,u) + 4*P(f,f) + P(u,d,d,u) + P(d,u,u,d) + 2*(P(u,d,f,f) + P(d,u,f,f) + P(f,f,u,d) + P(f,f,d,u)))
+            phi_1= 0.5*(P(d,f) + P(f,d) + P(d,f,f,d) + P(f,d,d,f))
+            phi_2= P(d,d)
+            pbc_proj = speye(3^L) - (phi2 + phi1 + phi0 + phi_1 + phi_2)
+            vcat(projectors, [pbc_proj])
+        else
+            projectors
+        end
+    end
+    if ancilla
+        return [proj ⊗ speye(3) for proj in all_proj]
+    else
+        return all_proj
+    end
+end
+
+function get_proj0_aklt(L::Int64; pbc::Bool=true, ancilla::Bool=false) ::Vector{SparseMatrixCSC{ComplexF64, Int64}}
+    all_proj = begin
+        proj0 = 1/sqrt(3)*(up1⊗down1 - flat1 ⊗ flat1 + down1⊗up1)
+        proj0 = proj(proj0)
+        projectors = [speye(3^(site-1)) ⊗ proj0 ⊗ speye(3^(L-site-1)) for site in 1:L-1]
+        if pbc 
+            u = up1; d = down1; f = flat1
+            P(v1,v2,v3,v4) = (v2*v4') ⊗ speye(3^(L-2)) ⊗ (v1*v3')
+            P(v1,v2) = (v1*v1') ⊗ speye(3^(L-2)) ⊗ (v2*v2')
+            phi0 = (P(u,d) + P(d,u) + P(f,f) + P(u,d,d,u) + P(d,u,u,d) 
+                - P(u,d,f,f) - P(d,u,f,f) - P(f,f,u,d) - P(f,f,d,u))/3.0
+            vcat(projectors, [phi0])
+        else
+            projectors
+        end
+    end
+    if ancilla
+        return [proj ⊗ speye(3) for proj in all_proj]
+    else
+        return all_proj
+    end
 end
 
 function get_projectors(circuit::Circuit) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
@@ -235,6 +271,7 @@ end
 
 function determine_trajectory(circuit::Circuit)
     traj_type = 0
+    ancilla = (:ancilla in circuit.observables) || (:AMI in circuit.observables)
 
     # check local spin
     if circuit.model == "fredkin"
@@ -251,6 +288,7 @@ function determine_trajectory(circuit::Circuit)
     
     # check boundary condition
     if circuit.bc == :obc
+        throw(error("Open boundary conditions are not supported for this model."))
         traj_type += 0
     elseif circuit.bc == :pbc
         traj_type += 1
@@ -260,19 +298,19 @@ function determine_trajectory(circuit::Circuit)
     if traj_type == 1
         return FredkinTrajectory
     elseif traj_type == 2
-        return FredkinPBCTrajectory
+        return ancilla ? FredkinPBCTrajectoryA : FredkinPBCTrajectory
     elseif traj_type == 3
         return MotzkinTrajectory
     elseif traj_type == 4
-        return MotzkinPBCTrajectory
+        return ancilla ? MotzkinPBCTrajectoryA : MotzkinPBCTrajectory
     elseif traj_type == 5
         return SU2Trajectory
     elseif traj_type == 6
-        return SU2PBCTrajectory
+        return ancilla ? SU2PBCTrajectoryA : SU2PBCTrajectory
     elseif traj_type == 7
         error("AKLT only supports PBC")
     elseif traj_type == 8
-        return AKLTPBCTrajectory
+        return ancilla ? BIQUADRATICPBCTrajectoryA : AKLTPBCTrajectory
     else
         error("Assertion of trajectory type failed.")
     end

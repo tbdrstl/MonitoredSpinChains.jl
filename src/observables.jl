@@ -167,7 +167,7 @@ function magnetization(traj::SpinOneTrajectory)
 
 
     @fastmath @inbounds for site in 1:L
-        m = 0.5*dot(traj.state, speye(3^(site - 1)) ⊗ Z1 ⊗ speye(3^(L - site)), traj.state)
+        m = dot(traj.state, speye(3^(site - 1)) ⊗ Z1 ⊗ speye(3^(L - site)), traj.state)
         
         M += m
         varM += m^2
@@ -185,7 +185,7 @@ function magnetizationX(traj::SpinOneTrajectory)
     varM = 0.0
 
     @fastmath @inbounds for site in 1:L
-        m = 0.5*dot(traj.state, speye(3^(site - 1)) ⊗ X1 ⊗ speye(3^(L - site)), traj.state)
+        m = dot(traj.state, speye(3^(site - 1)) ⊗ X1 ⊗ speye(3^(L - site)), traj.state)
 
         M += m
         varM += m^2

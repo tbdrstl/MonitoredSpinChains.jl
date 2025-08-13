@@ -7,6 +7,8 @@ abstract type SpinHalfTrajectory <: Trajectory end
     entanglement_entropy::Union{Missing,Vector{Float64}} = missing
     magnetization     ::Union{Missing,Matrix{Float64}} = missing
     magnetizationX    ::Union{Missing,Matrix{Float64}} = missing
+    total_proj_half   ::Union{Missing,Matrix{Float64}} = missing   # (mean,var,mean^2) for r = L/2
+    total_proj_quarter::Union{Missing,Matrix{Float64}} = missing   # (mean,var,mean^2) for r = L/4
 end
 
 struct Circuit 

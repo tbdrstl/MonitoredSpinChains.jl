@@ -10,6 +10,8 @@ function get_observables!(traj::Trajectory)
         obs == :EE && (traj.observables.entanglement_entropy[current_meas_step] = entanglement_entropy_general(traj,1:div(traj.circuit.L,2)))
         obs == :M && (traj.observables.magnetization[current_meas_step, :] .= magnetization(traj))
         obs == :MX && (traj.observables.magnetizationX[current_meas_step, :] .= magnetizationX(traj))
+        obs == :OPH && (traj.observables.total_proj_half[current_meas_step, :] .= projector_stats_r(traj, div(traj.circuit.L,2)))
+        obs == :OPQ && (traj.observables.total_proj_quarter[current_meas_step, :] .= projector_stats_r(traj, div(traj.circuit.L,4)))
 
         if obs == :EEfin && traj.current_timestep == traj.circuit.meas_steps*traj.circuit.meas_every
             # Calculate the entanglement entropy for the final state
@@ -32,6 +34,8 @@ function get_observables(circuit::Circuit)::Observables
         obs == :M && (observables.magnetization = zeros(circuit.meas_steps, 2))
         obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
         obs == :EEfin && (observables.entanglement_entropy = zeros(div(circuit.L,2)))
+        obs == :OPH && (observables.total_proj_half = zeros(circuit.meas_steps,3))
+        obs == :OPQ && (observables.total_proj_quarter = zeros(circuit.meas_steps,3))
     end
     return observables
 end
@@ -256,4 +260,53 @@ function anomalous_ent(A::AbstractVector{Int})
         ents[ind] = entanglement_entropy_general(psi, 1:div(l,2))
     end   
     return ents
+end
+
+# compute averaged projector statistics for pairs separated by distance r under PBC
+function projector_stats_r(traj::SpinHalfTrajectory, r::Int)
+    L = traj.circuit.L
+    @assert 0 < r <= div(L,2) "r must be in (0, L/2]"
+    if r == div(L,2) && isodd(L)
+        error("r = L/2 only meaningful for even L")
+    end
+    psi = traj.state
+
+    npairs = (iseven(L) && r == div(L,2)) ? div(L,2) : L
+    sumP = 0.0
+    sumP2 = 0.0
+
+    for i in 1:npairs
+        j = mod1(i + r, L)
+        if i > j
+            continue
+        end
+        exx = pauli2_expectation(psi, L, i, j, :X)
+        eyy = pauli2_expectation(psi, L, i, j, :Y)
+        ezz = pauli2_expectation(psi, L, i, j, :Z)
+        p = 0.25 * (1 - exx - eyy - ezz)
+        sumP += p
+        sumP2 += p^2
+    end
+
+    meanP = sumP/npairs
+    varP = sumP2/npairs - meanP^2
+    return (meanP, varP, meanP^2)
+end
+
+projector_stats_r(::SpinOneTrajectory, r::Int) = error("OPH/OPQ only defined for spin-1/2 trajectories")
+
+function pauli2_expectation(psi::AbstractVector{T}, L::Int, i::Int, j::Int, axis::Symbol) where {T}
+    op = pauli_two_site_operator(L, i, j, axis)
+    return real(dot(psi, op*psi))
+end
+
+function pauli_two_site_operator(L::Int, i::Int, j::Int, axis::Symbol)
+    A = axis === :X ? X : axis === :Y ? Y : axis === :Z ? Z : error("Unknown axis $axis")
+    if j < i
+        i,j = j,i
+    end
+    left  = i > 1      ? speye(2^(i-1))      : speye(1)
+    mid   = j-i-1 > 0  ? speye(2^(j-i-1))    : speye(1)
+    right = j < L      ? speye(2^(L-j))      : speye(1)
+    return left ⊗ A ⊗ mid ⊗ A ⊗ right
 end

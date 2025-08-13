@@ -144,6 +144,10 @@ function create_simulation(params::Dict; testmode::Bool=false)
         end
     end
 
+    # normalize/prepare optional parameters
+    noise_list = get(params, "noise", [L -> 0.0])
+    noise_list = [n isa Function ? n : (_ -> n) for n in noise_list]
+
     # create Simulation struct and fill it with Circuits
     vector_of_circuits = Vector{Circuit}(undef, 0)
 
@@ -156,6 +160,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
         (_,initialState) in enumerate(params["initialState"]),
         (_,measurement) in enumerate(params["measurement"]),
         (_,feedback) in enumerate(params["feedback"]),
+        (_,noise) in enumerate(noise_list),
         (_,trajectories_averaged) in enumerate(params["trajectories_averaged"]),
         (_,thermalizationSteps) in enumerate(params["thermalizationSteps"]),
         (_,meas_every) in enumerate(params["meas_every"]),
@@ -172,6 +177,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
             initialState,
             measurement,
             feedback,
+            noise(systemSize),
             params["result_folder"],
             params["observables"],
             trajectories_averaged,

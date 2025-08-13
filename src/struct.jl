@@ -19,6 +19,7 @@ struct Circuit
     initialState            ::Function
     measurement             ::Bool
     feedback                ::Symbol  
+    noise                   ::Real
     result_folder           ::String
     observables             ::Vector{Symbol}                
     trajectories_averaged   ::Bool

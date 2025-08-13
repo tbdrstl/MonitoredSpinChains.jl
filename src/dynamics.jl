@@ -38,7 +38,6 @@ function time_step!(traj::Trajectory) :: Trajectory
     # unitarySteps = ceil(Int, traj.circuit.unitaryRate)
     # unitaryTimeEvolProb = traj.circuit.unitaryRate / unitarySteps
 
-
     time_step!(traj.circuit, traj)#, unitaryTimeEvolProb, unitarySteps)
 end
 
@@ -55,9 +54,16 @@ function meas!(traj::Trajectory, site::Int)
         sqrtProb = sqrt(prob)
         traj.state .= Ppsi/sqrtProb
 
-        correct!(traj,site)
+        # false not correction if measurement outcome is singlet
+        if rand() < (1+exp(-traj.circuit.noise))/2
+            correct!(traj,site)
+        end
     else
         traj.state .= (traj.state - Ppsi)/sqrt(1.0-prob)
+        # false correction if measurement outcome is triplet
+        if rand() < (1-exp(-traj.circuit.noise))/2
+            correct!(traj,site)
+        end 
     end
 
     return 

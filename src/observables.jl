@@ -81,8 +81,6 @@ function entanglement_entropy_general(psi::AbstractVector{T}, A::AbstractVector{
     # Reshape psi into an n-dimensional tensor with each dimension of size 2
     reshaped_psi = reshape(psi, ntuple(_ -> 2, n))
 
-
-    
     # Permute the dimensions according to the calculated permutation
     permuted_psi = permutedims(reshaped_psi, perm)
     

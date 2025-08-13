@@ -39,12 +39,58 @@ function get_proj_motzkin_pbc(L::Int) ::Vector{SparseMatrixCSC{ComplexF64, Int64
     return vcat(projectors, [pbc_proj])
 end
 
-function get_proj_su2(L::Int64; pbc::Bool=true) ::Vector{SparseMatrixCSC{ComplexF64, Int64}} 
-    projectors = [speye(2^(site-1))⊗ Projector ⊗speye(2^(L-site-1)) for site in 1:L-1]
-    if pbc
-        pbc_proj = [(speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25]
-        return vcat(projectors, pbc_proj)
+function get_proj_su2(L::Int; r::Int=1, pbc::Bool=true)::Vector{SparseMatrixCSC{ComplexF64,Int64}}
+    @assert r > 0 "r must be positive"
+    @assert r <= div(L,2) "r must satisfy r ≤ L/2"
+
+    # Fast path for r == 1 reproducing original behavior
+    if r == 1
+        projectors = [speye(2^(site-1)) ⊗ Projector ⊗ speye(2^(L-site-1)) for site in 1:L-1]
+        if pbc
+            # projector between first and last qubit
+            pbc_proj = (speye(2^L) - X ⊗ (speye(2^(L-2)) ⊗ X) - Y ⊗ (speye(2^(L-2)) ⊗ Y) - Z ⊗ (speye(2^(L-2)) ⊗ Z)) * 0.25
+            return vcat(projectors, [pbc_proj])
+        else
+            return projectors
+        end
     end
+
+    projectors = Vector{SparseMatrixCSC{ComplexF64,Int64}}()
+
+    # Helper to build a projector between sites i and j (i<j) separated by distance r
+    # Using formula: 1/4 ( I - X_i X_j - Y_i Y_j - Z_i Z_j )
+    function two_site_projector(i::Int, j::Int)
+        # Blocks: left, site i, middle gap, site j, right
+        left  = i>1       ? speye(2^(i-1))          : speye(1)
+        gap   = j - i - 1 > 0 ? speye(2^(j-i-1))    : speye(1)
+        right = j < L     ? speye(2^(L-j))          : speye(1)
+
+        XiXj = left ⊗ X ⊗ gap ⊗ X ⊗ right
+        YiYj = left ⊗ Y ⊗ gap ⊗ Y ⊗ right
+        ZiZj = left ⊗ Z ⊗ gap ⊗ Z ⊗ right
+        Id   = speye(2^L)
+        return 0.25 * (Id - XiXj - YiYj - ZiZj) |> SparseMatrixCSC{ComplexF64,Int64}
+    end
+
+    pairs = Set{Tuple{Int,Int}}()
+    if pbc
+        for i in 1:L
+            j = mod1(i + r, L)  # wrap using mod1 (same as ((i + r - 1) % L) + 1 for positive r)
+            if i != j
+                a,b = minmax(i,j)
+                push!(pairs, (a,b))
+            end
+        end
+    else
+        for i in 1:L-r
+            push!(pairs, (i, i+r))
+        end
+    end
+
+    for (i,j) in sort(collect(pairs))
+        push!(projectors, two_site_projector(i,j))
+    end
+
     return projectors
 end
 

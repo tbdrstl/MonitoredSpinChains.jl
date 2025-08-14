@@ -41,18 +41,21 @@ function get_observables(circuit::Circuit)::Observables
 end
 
 function total_projector(traj::Trajectory)
-    @unpack L = traj.circuit
+    @unpack L,bc = traj.circuit
 
     OP = 0.0
     OPvar = 0.0
 
-    @fastmath @inbounds for site in 1:L
+    @fastmath @inbounds for site in eachindex(traj.projectors)
         dotprod = real(dot(traj.state, traj.projectors[site], traj.state))
         OP += dotprod
         OPvar += dotprod^2
     end
-    OP = OP / L
-    OPvar = OPvar / L - OP^2
+    
+    L_bound = bc == :pbc ? L : L - 1
+
+    OP = OP / L_bound
+    OPvar = OPvar / L_bound - OP^2
     OP2 = OP^2
 
     return OP, OPvar, OP2
@@ -262,34 +265,73 @@ function anomalous_ent(A::AbstractVector{Int})
     return ents
 end
 
-# compute averaged projector statistics for pairs separated by distance r under PBC
+# compute averaged projector statistics for pairs separated by distance r (handles PBC & OBC)
 function projector_stats_r(traj::SpinHalfTrajectory, r::Int)
     L = traj.circuit.L
-    @assert 0 < r <= div(L,2) "r must be in (0, L/2]"
-    if r == div(L,2) && isodd(L)
-        error("r = L/2 only meaningful for even L")
+    bc = traj.circuit.bc
+
+    if bc == :pbc
+        @assert 0 < r <= div(L,2) "For PBC, r must be in (0, L/2]"
+        if r == div(L,2) && isodd(L)
+            error("r = L/2 only meaningful for even L (PBC)")
+        end
+    else # :obc
+        @assert 0 < r <= L-1 "For OBC, r must be in (0, L-1]"
     end
+
     psi = traj.state
 
-    npairs = (iseven(L) && r == div(L,2)) ? div(L,2) : L
     sumP = 0.0
     sumP2 = 0.0
+    npairs = 0
 
-    for i in 1:npairs
-        j = mod1(i + r, L)
-        if i > j
-            continue
+    if bc == :pbc
+        if r == div(L,2) && iseven(L)
+            # exactly L/2 unique pairs (i, i+L/2)
+            @inbounds for i in 1:div(L,2)
+                j = i + r
+                exx = pauli2_expectation(psi, L, i, j, :X)
+                eyy = pauli2_expectation(psi, L, i, j, :Y)
+                ezz = pauli2_expectation(psi, L, i, j, :Z)
+                p = 0.25 * (1 - exx - eyy - ezz)
+                sumP += p
+                sumP2 += p^2
+            end
+            npairs = div(L,2)
+        else
+            # L distinct unordered pairs (i, i+r mod L) since r != L/2
+            @inbounds for i in 1:L
+                j = i + r
+                if j > L
+                    j -= L
+                end
+                # no duplicates for r != L/2
+                exx = pauli2_expectation(psi, L, i, j, :X)
+                eyy = pauli2_expectation(psi, L, i, j, :Y)
+                ezz = pauli2_expectation(psi, L, i, j, :Z)
+                p = 0.25 * (1 - exx - eyy - ezz)
+                sumP += p
+                sumP2 += p^2
+            end
+            npairs = L
         end
-        exx = pauli2_expectation(psi, L, i, j, :X)
-        eyy = pauli2_expectation(psi, L, i, j, :Y)
-        ezz = pauli2_expectation(psi, L, i, j, :Z)
-        p = 0.25 * (1 - exx - eyy - ezz)
-        sumP += p
-        sumP2 += p^2
+    else
+        # OBC: only pairs fully inside chain: (i, i+r) with i+r <= L
+        last_i = L - r
+        @inbounds for i in 1:last_i
+            j = i + r
+            exx = pauli2_expectation(psi, L, i, j, :X)
+            eyy = pauli2_expectation(psi, L, i, j, :Y)
+            ezz = pauli2_expectation(psi, L, i, j, :Z)
+            p = 0.25 * (1 - exx - eyy - ezz)
+            sumP += p
+            sumP2 += p^2
+        end
+        npairs = last_i
     end
 
-    meanP = sumP/npairs
-    varP = sumP2/npairs - meanP^2
+    meanP = sumP / npairs
+    varP = sumP2 / npairs - meanP^2
     return (meanP, varP, meanP^2)
 end
 

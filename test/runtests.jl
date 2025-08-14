@@ -13,3 +13,4 @@ import MonitoredSpinChains: mpiexec
 # include("full_sim.jl")
 # include("fs1.jl")
 include("general_projectors.jl")
+# include("benchmark_meas_fredkin.jl")

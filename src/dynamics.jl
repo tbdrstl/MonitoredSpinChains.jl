@@ -55,13 +55,13 @@ function meas!(traj::Trajectory, site::Int)
         traj.state .= Ppsi/sqrtProb
 
         # false not correction if measurement outcome is singlet
-        if rand() < (1+exp(-traj.circuit.noise))/2
+        if rand() < (1.0+exp(-traj.circuit.noise))/2.
             correct!(traj,site)
         end
     else
         traj.state .= (traj.state - Ppsi)/sqrt(1.0-prob)
         # false correction if measurement outcome is triplet
-        if rand() < (1-exp(-traj.circuit.noise))/2
+        if rand() < (1.0-exp(-traj.circuit.noise))/2.
             correct!(traj,site)
         end 
     end
@@ -70,18 +70,18 @@ function meas!(traj::Trajectory, site::Int)
 end
 
 # Specialized fast SU2 measurement dispatch (replaces meas_fast! wrapper)
-function meas!(traj::SU2Trajectory, site::Int)
-    _meas_fast_su2!(traj, site)
-end
+# function meas!(traj::SU2Trajectory, site::Int)
+#     _meas_fast_su2!(traj, site)
+# end
 
-function meas!(traj::SU2PBCTrajectory, site::Int)
-    _meas_fast_su2!(traj, site)
-end
+# function meas!(traj::SU2PBCTrajectory, site::Int)
+#     _meas_fast_su2!(traj, site)
+# end
 
 # Internal fast SU2 measurement (nearest-neighbour singlet projector)
 function _meas_fast_su2!(traj::SpinHalfTrajectory, site::Int)
     L = traj.circuit.L
-    pbc = traj isa SU2PBCTrajectory
+    pbc = (traj isa SU2PBCTrajectory)
     # determine measured pair (i,j) with i < j (bond numbering matches stored projectors order)
     if pbc && site == L
         i, j = 1, L
@@ -98,12 +98,12 @@ function _meas_fast_su2!(traj::SpinHalfTrajectory, site::Int)
 
     # Function barrier with concrete state type assumption for performance
     psi = traj.state::Vector{ComplexF64}
-    _meas_fast_su2_core!(psi, L, i, j, traj.circuit.noise)
+    _meas_fast_su2_core!(psi, L, i, j)
     return traj
 end
 
 # Core, allocation-free kernel acting in-place on psi for a single nearest-neighbour bond (i,j)
-@inline function _meas_fast_su2_core!(psi::Vector{ComplexF64}, L::Int, i::Int, j::Int, noise::Real)
+@inline function _meas_fast_su2_core!(psi::Vector{ComplexF64}, L::Int, i::Int, j::Int)
     N = length(psi)
     bit_i = L - i
     bit_j = L - j
@@ -126,8 +126,7 @@ end
     end
     p = clamp(p, 0.0, 1.0)
 
-    singlet = rand() < p
-    expnoise = exp(-noise)
+    singlet = (rand() < p)
 
     if singlet
         # SECOND PASS: project onto singlet (|01>-|10|)/√2; zero 00 & 11 components
@@ -154,11 +153,6 @@ end
                 psi[idx11] = 0.0 + 0.0im
             end
         end
-        if rand() < (1 + expnoise) * 0.5
-            # site passed from caller; we do not know here -> need external correction, so handled outside
-            # For speed, let caller perform correction; here we only mark need via return value? Simpler: do nothing.
-            # (Kept semantics identical by calling correct! in wrapper if needed)
-        end
     else
         # Triplet branch: normalize remaining (1-p) subspace then symmetrize 01/10 components
         one_minus_p = 1 - p
@@ -178,9 +172,6 @@ end
                 psi[idx01] = newv
                 psi[idx10] = newv
             end
-        end
-        if rand() < (1 - expnoise) * 0.5
-            # correction handled by caller wrapper if required
         end
     end
     return nothing
@@ -272,4 +263,116 @@ function controlPsiZ!(state::AbstractVector{T}, L::Int, site::Int) where {T<:Uni
             state[i+1] *= -1.0  # Julia uses 1-based indexing
         end
     end
+end
+
+# Fast Fredkin PBC measurement (3-qubit projector) for sites 1..L-2; falls back otherwise
+function meas_fast_fredkin!(traj::FredkinPBCTrajectory, site::Int)
+    L = traj.circuit.L
+    if 1 <= site <= L-2
+        psi = traj.state::Vector{ComplexF64}
+        p = _meas_fast_fredkin_core!(psi, L, site, site+1, site+2)
+        # noise logic analogous to meas!: treat success probability = p
+        if rand() < p
+            if rand() < (1 + exp(-traj.circuit.noise)) * 0.5
+                correct!(traj, site)
+            end
+        else
+            if rand() < (1 - exp(-traj.circuit.noise)) * 0.5
+                correct!(traj, site)
+            end
+        end
+        return traj
+    else
+        return meas!(traj, site)  # use existing projector (edge projectors)
+    end
+end
+
+# Fallbacks for other trajectory types
+meas_fast_fredkin!(traj::Trajectory, site::Int) = meas!(traj, site)
+
+# Core kernel: returns probability p (post-measurement state updated in-place)
+@inline function _meas_fast_fredkin_core!(psi::Vector{ComplexF64}, L::Int, i::Int, j::Int, k::Int)
+    N = length(psi)
+    # bit positions (MSB ordering)
+    bit_i = L - i; bit_j = L - j; bit_k = L - k
+    mask_i = UInt64(1) << bit_i
+    mask_j = UInt64(1) << bit_j
+    mask_k = UInt64(1) << bit_k
+    three_mask = mask_i | mask_j | mask_k
+
+    # FIRST PASS: accumulate p using base pattern (i,j,k) = (0,0,1)
+    p = 0.0
+    flip_jk = mask_j | mask_k   # 001 -> 010
+    flip_j  = mask_j            # 001 -> 011
+
+    @inbounds for s_uint in UInt64(0):UInt64(N-1)
+        if (s_uint & three_mask) == mask_k
+            idx001 = Int(s_uint) + 1
+            idx010 = Int(s_uint ⊻ flip_jk) + 1
+            idx011 = Int(s_uint ⊻ flip_j) + 1
+            idx101 = Int((s_uint ⊻ flip_j) ⊻ mask_i) + 1
+            diff1 = psi[idx001] - psi[idx010]
+            diff2 = psi[idx011] - psi[idx101]
+            p += 0.5 * (abs2(diff1) + abs2(diff2))
+        end
+    end
+    p = clamp(p, 0.0, 1.0)
+
+    success = rand() < p
+    if success
+        invnorm = p > 0 ? inv(sqrt(p)) : 0.0
+        # Project: Pψ has components diff/2; then normalize => diff /(2 sqrt(p)) = diff * 0.5 * invnorm
+        @inbounds for s_uint in UInt64(0):UInt64(N-1)
+            if (s_uint & three_mask) == mask_k
+                base = s_uint
+                idx001 = Int(base) + 1
+                idx010 = Int(base ⊻ flip_jk) + 1
+                idx011 = Int(base ⊻ flip_j) + 1
+                idx101 = Int((base ⊻ flip_j) ⊻ mask_i) + 1
+                diff1 = psi[idx001] - psi[idx010]
+                diff2 = psi[idx011] - psi[idx101]
+                scale = 0.5 * invnorm
+                new001 = diff1 * scale
+                new011 = diff2 * scale
+                psi[idx001] = new001
+                psi[idx010] = -new001
+                psi[idx011] = new011
+                psi[idx101] = -new011
+                # zero other four states in block: 000,100,110,111
+                idx000 = Int(base ⊻ mask_k) + 1
+                idx100 = Int((base ⊻ mask_k) ⊻ mask_i) + 1
+                idx110 = Int(((base ⊻ mask_k) ⊻ mask_i) ⊻ mask_j) + 1
+                idx111 = Int((base ⊻ mask_k) ⊻ mask_j) + 1
+                psi[idx000] = 0.0 + 0.0im
+                psi[idx100] = 0.0 + 0.0im
+                psi[idx110] = 0.0 + 0.0im
+                psi[idx111] = 0.0 + 0.0im
+            end
+        end
+    else
+        one_minus_p = 1 - p
+        invnorm = one_minus_p > 0 ? inv(sqrt(one_minus_p)) : 0.0
+        # Subtract projection component: delta = diff/2
+        @inbounds for s_uint in UInt64(0):UInt64(N-1)
+            if (s_uint & three_mask) == mask_k
+                base = s_uint
+                idx001 = Int(base) + 1
+                idx010 = Int(base ⊻ flip_jk) + 1
+                idx011 = Int(base ⊻ flip_j) + 1
+                idx101 = Int((base ⊻ flip_j) ⊻ mask_i) + 1
+                diff1 = psi[idx001] - psi[idx010]
+                diff2 = psi[idx011] - psi[idx101]
+                delta1 = diff1 * 0.5
+                delta2 = diff2 * 0.5
+                psi[idx001] -= delta1
+                psi[idx010] += delta1
+                psi[idx011] -= delta2
+                psi[idx101] += delta2
+            end
+        end
+        @inbounds @simd for k in eachindex(psi)
+            psi[k] *= invnorm
+        end
+    end
+    return p
 end

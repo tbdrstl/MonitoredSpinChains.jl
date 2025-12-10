@@ -239,22 +239,28 @@ function create_simulation(params::Dict; testmode::Bool=false)
     return Simulation(params["name"], vector_of_circuits, params)
 end
 
-function get_trajectories_from_simulation(sim::Simulation; state::Bool=false, projectors::Bool=false, feedbackIdx::Bool=false)
+function get_trajectories_from_simulation(sim::Simulation; state::Bool=false, projectors::Bool=false, feedbackIdx::Bool=false, traj_start::Int=1, traj_count::Int=100_000)
     trajectories = Vector{Trajectory}(undef, 0)
     for circuit in sim.params
-        traj_circuit = get_trajectories_from_circuit(circuit; state=state, projectors=projectors, feedbackIdx=feedbackIdx)
+        traj_circuit = get_trajectories_from_circuit(circuit; state=state, projectors=projectors, feedbackIdx=feedbackIdx, traj_start=traj_start, traj_count=traj_count)
         push!(trajectories,traj_circuit...)
     end
     return trajectories
 end
 
-function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, projectors::Bool=false, feedbackIdx::Bool=false)
+function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, projectors::Bool=false, feedbackIdx::Bool=false, traj_start::Int=1, traj_count::Int=100_000)
     trajectories = Vector{Trajectory}(undef, 0)
     observables = get_observables(circuit)
     current_timestep = 1
     thermalized = ifelse(circuit.thermalizationSteps == 0, true, false)
+
+    # Limit to a specific trajectory ID window for job-array splitting
+    traj_end = traj_start + traj_count - 1
     
     for trajectoryID in 1:circuit.average
+        if trajectoryID < traj_start || trajectoryID > traj_end
+            continue
+        end
         traj_type = determine_trajectory(circuit)
         traj = traj_type(  trajectoryID = trajectoryID,
                                         circuit = circuit,

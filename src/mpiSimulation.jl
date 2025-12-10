@@ -1,4 +1,4 @@
-function simulate(sim::Simulation)
+function simulate(sim::Simulation; traj_start::Int=1, traj_count::Int=100_000)
     
     MPI.Init()
 
@@ -14,7 +14,7 @@ function simulate(sim::Simulation)
     # println("MPI successfully initialized on $(rank) of $(world_size) workers.")
     
     # collect all trajectories
-    trajectories = get_trajectories_from_simulation(sim)
+    trajectories = get_trajectories_from_simulation(sim; traj_start=traj_start, traj_count=traj_count)
     ntrajectories = length(trajectories)
     MPI.Barrier(comm)
 
@@ -122,88 +122,6 @@ function simulate(sim::Simulation)
         println("Collecting and Averaging took $(round(((t2 - t1)/3600)))h $(round((t2 - t1)/60))min $(round((t2 - t1)))s.")
     end
     MPI.Barrier(comm)
-    MPI.Finalize()
-end
-
-function simulate_many_traj(sim::Simulation; repeat::Int=100)
-    
-    MPI.Init()
-
-
-    comm = MPI.COMM_WORLD
-    rank = MPI.Comm_rank(comm)
-    world_size = MPI.Comm_size(comm)
-    nworkers = world_size - 1
-
-    root = 0
-
-    # println("MPI successfully initialized on $(rank) of $(world_size) workers.")
-    
-    for iteration in 1:repeat
-        # collect all trajectories
-        trajectories = get_trajectories_from_simulation(sim)
-        ntrajectories = length(trajectories)
-
-        MPI.Barrier(comm)
-        if rank == root
-            save_parameter_file(sim)
-            println("Starting $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers...")
-        end
-        
-        if world_size == 1
-            for i in 1:ntrajectories
-                run_trajectory!(trajectories[i])
-            end
-            collect_data_job_array(sim, iteration)
-            println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
-
-            MPI.Finalize()
-
-            return 
-        end
-
-        # make initial state function wrapper available to all workers
-        if rank == root
-            for i in 1:nworkers
-                MPI.send(sim,comm; dest=i)
-            end
-        else 
-            MPI.recv(comm; source=root)
-        end
-        MPI.Barrier(comm)
-
-
-        # distribute indices to workers
-        if rank == root
-            # randomly distribute indices
-            indices = randperm(ntrajectories)
-            part = [indices[i:nworkers:end] for i in 1:nworkers]
-            for i in 1:nworkers
-                MPI.send(part[i],comm; dest=i)
-            end
-        else
-            todo = MPI.recv(comm)
-            trajectories = trajectories[todo]
-            for t in trajectories
-                run_trajectory!(t)
-            end
-        end
-
-        if rank == root
-            println("Dispatched to $(nworkers) MPI procs. Waiting for results...")
-        end
-        MPI.Barrier(comm)
-        
-        if rank == root
-            collect_data_job_array(sim, iteration)
-            clean_after_you(sim.params)
-            # println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
-            println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers, iteration $(iteration).")
-        end
-        
-        MPI.Barrier(comm)
-    end
-
     MPI.Finalize()
 end
 

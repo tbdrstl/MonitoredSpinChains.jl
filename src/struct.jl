@@ -157,24 +157,42 @@ function subtract!(a::Observables,b::Observables) ::Observables
 end
 
 function hash(circ::Circuit)
-    fnames = fieldnames(typeof(circ))
-    to_hash = ""
-    for fname_iterator in fnames
-        to_hash *= string(getfield(circ, fname_iterator))
-    end
-    return hash(to_hash)
+    # Build a canonical signature, skipping volatile fields and eliding defaults
+    sig = canonical_circuit_signature(circ)
+    return hash(sig)
 end
 
 function hash(traj::Trajectory)
     # only hash trajID and circuit of trajectory. All information needed + oher things might change
-    to_hash = string(traj.trajectoryID)
-    to_hash *= string(hash(traj.circuit))
-    return hash(to_hash)
+    return hash((traj.trajectoryID, hash(traj.circuit)))
 end
 
 function hash(circuit::Circuit, trajID::Int64)
     # only hash trajID and circuit of trajectory. All information needed + oher things might change
-    to_hash = string(trajID)
-    to_hash *= string(hash(circuit))
-    return hash(to_hash)
+    return hash((trajID, hash(circuit)))
+end
+
+# Helpers for stable circuit hashing
+normalize_for_hash(x::Function) = string(x)
+normalize_for_hash(x::Symbol) = String(x)
+normalize_for_hash(x::AbstractString) = String(x)
+normalize_for_hash(x::AbstractVector) = map(normalize_for_hash, x)
+normalize_for_hash(x::Dict) = [(k, normalize_for_hash(x[k])) for k in sort(collect(keys(x)))]
+normalize_for_hash(x) = x
+
+function canonical_circuit_signature(circ::Circuit)
+    sig = Vector{Any}()
+    for fname in fieldnames(Circuit)
+        if fname in MonitoredSpinChains.VOLATILE_FIELDS
+            continue
+        end
+        if haskey(MonitoredSpinChains.DEFAULT_FIELD_VALUES, fname)
+            default_val = MonitoredSpinChains.DEFAULT_FIELD_VALUES[fname]
+            if getfield(circ, fname) == default_val
+                continue
+            end
+        end
+        push!(sig, (fname, normalize_for_hash(getfield(circ, fname))))
+    end
+    return sig
 end

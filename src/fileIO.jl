@@ -147,7 +147,6 @@ function collect_data(sim::Simulation)
     return 
 end
 
-
 function collect_data(circuit::Circuit)
     file = joinpath(circuit.result_folder, "already_computed", basename(circuit_to_filename(circuit)))
 

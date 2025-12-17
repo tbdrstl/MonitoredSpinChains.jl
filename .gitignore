@@ -17,6 +17,8 @@ deps/src/
 docs/build/
 docs/site/
 
+scripts/
+
 # tests
 test/test_data/
 test/Motzkin_obc/

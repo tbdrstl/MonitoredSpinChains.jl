@@ -18,6 +18,8 @@ docs/build/
 docs/site/
 
 scripts/
+Local*
+local*
 
 # tests
 test/test_data/

@@ -44,6 +44,17 @@ function main()
     haskey(data, "params") || error("Params file must contain key 'params'")
     params = data["params"]
 
+    # Resolve initial state identifiers (stored as strings) back to callables
+    if haskey(params, "initialState")
+        params["initialState"] = map(MonitoredSpinChains.normalize_initial_state, params["initialState"])
+    end
+
+    for key in ("meas_steps", "thermalizationSteps", "meas_every")
+        if haskey(params, key)
+            params[key] = map(MonitoredSpinChains.normalize_step_function, params[key])
+        end
+    end
+
     # Optional override: force a single system size from CLI
     if opts["--system-size"] !== nothing
         params["systemSize"] = [parse(Int, opts["--system-size"])]

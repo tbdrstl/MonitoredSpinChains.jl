@@ -194,11 +194,15 @@ function create_simulation(params::Dict; testmode::Bool=false)
     noise_list = get(params, "noise", [L -> 0.0])
     noise_list = [n isa Function ? n : (_ -> n) for n in noise_list]
 
+    meas_steps_list = map(normalize_step_function, params["meas_steps"])
+    thermalization_list = map(normalize_step_function, params["thermalizationSteps"])
+    meas_every_list = map(normalize_step_function, params["meas_every"])
+
     # create Simulation struct and fill it with Circuits
     vector_of_circuits = Vector{Circuit}(undef, 0)
 
     for (_,systemSize) in enumerate(params["systemSize"]),
-        (_,meas_steps) in enumerate(params["meas_steps"]),
+        (_,meas_steps) in enumerate(meas_steps_list),
         (_,average) in enumerate(params["average"]),
         # (_,unitaryRate) in enumerate(params["unitaryRate"]),
         # (_,unitarySetup) in enumerate(params["unitarySetup"]),
@@ -208,11 +212,13 @@ function create_simulation(params::Dict; testmode::Bool=false)
         (_,feedback) in enumerate(params["feedback"]),
         (_,noise) in enumerate(noise_list),
         (_,trajectories_averaged) in enumerate(params["trajectories_averaged"]),
-        (_,thermalizationSteps) in enumerate(params["thermalizationSteps"]),
-        (_,meas_every) in enumerate(params["meas_every"]),
+        (_,thermalizationSteps) in enumerate(thermalization_list),
+        (_,meas_every) in enumerate(meas_every_list),
         (_,model) in enumerate(params["model"])
 
         
+        normalized_initial = normalize_initial_state(initialState)
+
         push!(vector_of_circuits, Circuit(
             systemSize,
             meas_steps(systemSize),
@@ -220,7 +226,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
             # unitaryRate,
             # unitarySetup,
             bc,
-            initialState,
+            normalized_initial,
             measurement,
             feedback,
             noise(systemSize),
@@ -268,6 +274,10 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
                                         thermalized = thermalized,
                                         observables = observables)
         # check if trajectory has already been computed
+        # First check fast lookup file (populated by prep_job), then fallback to file check
+        if is_trajectory_computed(circuit, trajectoryID)
+            continue
+        end
         file = trajectory_to_filename(traj)
         computed_file = joinpath(traj.circuit.result_folder, "already_computed", basename(file))
         if !isfile(computed_file)

@@ -91,35 +91,32 @@ function simulate(sim::Simulation; traj_start::Int=1, traj_count::Int=100_000)
     MPI.Barrier(comm)
     t1 = MPI.Wtime()
     
-    # make all workers collect data
+    # Collect data from this job array batch only (thread-safe partial collection)
     if rank == root
-        println("Collecting data...")
-        ncircs = 1:length(sim.params)
-        part = [ncircs[i:nworkers:end] for i in 1:nworkers]
-        for i in 1:nworkers
-            MPI.send(part[i],comm; dest=i)
+        println("Collecting data for trajectories $(traj_start) to $(traj_start + traj_count - 1)...")
+        data_folder = get_data_folder(sim.params[1])
+        traj_ids = collect(traj_start:min(traj_start + traj_count - 1, sim.params[1].average))
+        
+        for circuit in sim.params
+            collected = collect_data_partial(circuit, traj_ids; data_folder=data_folder)
+            println("Collected $(length(collected)) trajectories for L=$(circuit.L)")
         end
-    else
-        todo = MPI.recv(comm)
-        circs = sim.params[todo]
-        for circuit in circs
-            collect_data(circuit)
-        end
-    end
-
-    MPI.Barrier(comm)
-
-    # average data
-    if rank == root
-        println("Averaging data...")
-        @time average_trajectories_from_collect(sim)
-        println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
+        
+        println("Finished $(sim.name) batch: trajectories $(traj_start)-$(traj_start + traj_count - 1)")
+        println("Note: Run average_trajectories_from_collected(sim) after all batches complete.")
     end
     
     MPI.Barrier(comm)
     t2 = MPI.Wtime()
     if rank == root
-        println("Collecting and Averaging took $(round(((t2 - t1)/3600)))h $(round((t2 - t1)/60))min $(round((t2 - t1)))s.")
+        println("Collection took $(round(((t2 - t1)/3600)))h $(round((t2 - t1)/60))min $(round((t2 - t1)))s.")
+        
+        # Sync lookup files from result_folder back to $DATA
+        data_folder = get_data_folder(sim.params[1])
+        if data_folder != sim.params[1].result_folder
+            println("Syncing lookup files to \$DATA...")
+            sync_lookup_from_result_folder(sim; data_folder=data_folder)
+        end
     end
     MPI.Barrier(comm)
     MPI.Finalize()

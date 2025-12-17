@@ -6,7 +6,7 @@ module MonitoredSpinChains
     using LuxurySparse: IMatrix
     using UnPack
     using MPI
-    using MKL
+    using Dates: now
     import Combinatorics: combinations, multiset_permutations
     import Combinat: multisets, nmultisets
     import ProgressMeter: @showprogress
@@ -31,12 +31,12 @@ module MonitoredSpinChains
 
     include("struct.jl")
     include("constants.jl")
+    include("fileIO.jl")
     include("observables.jl")
     include("mpiSimulation.jl")
     include("dynamics.jl")
     include("initialize.jl")
     include("initialStates.jl")
-    include("fileIO.jl")
     include("analysis.jl")
 
 end

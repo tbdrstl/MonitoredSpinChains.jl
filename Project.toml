@@ -1,7 +1,7 @@
 name = "MonitoredSpinChains"
 uuid = "3dd0d50f-2b6a-4c40-8fcf-6320226936db"
 authors = ["Tobias Doerstel <tobias.doerstel@gmail.com>"]
-version = "2.0.0-beta"
+version = "2.0.0"
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"

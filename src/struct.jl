@@ -30,7 +30,6 @@ struct Circuit
     model                   ::String
 end
 struct Simulation
-    name            ::String
     params          ::Vector{Circuit}
     params_dict     ::Dict
 end

@@ -242,7 +242,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
     unique!(vector_of_circuits)
     check_if_circuit_is_already_computed!(vector_of_circuits; testmode=testmode)
 
-    return Simulation(params["name"], vector_of_circuits, params)
+    return Simulation(vector_of_circuits, params)
 end
 
 function get_trajectories_from_simulation(sim::Simulation; state::Bool=false, projectors::Bool=false, feedbackIdx::Bool=false, traj_start::Int=1, traj_count::Int=100_000)

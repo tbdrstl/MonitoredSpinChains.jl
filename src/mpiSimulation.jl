@@ -32,7 +32,7 @@ function simulate(sim::Simulation; traj_start::Int=1, traj_count::Int=100_000)
     MPI.Barrier(comm)
     if rank == root
         save_parameter_file(sim)
-        println("Starting $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers...")
+        println("Starting simulation with $(ntrajectories) trajectories on $(nworkers) workers...")
     end
     
     if world_size == 1
@@ -41,7 +41,7 @@ function simulate(sim::Simulation; traj_start::Int=1, traj_count::Int=100_000)
         end
         collect_data(sim)
         average_trajectories_from_collect(sim)
-        println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
+        println("Finished simulation with $(ntrajectories) trajectories on $(nworkers) workers.")
 
         MPI.Finalize()
 
@@ -102,7 +102,7 @@ function simulate(sim::Simulation; traj_start::Int=1, traj_count::Int=100_000)
             println("Collected $(length(collected)) trajectories for L=$(circuit.L)")
         end
         
-        println("Finished $(sim.name) batch: trajectories $(traj_start)-$(traj_start + traj_count - 1)")
+        println("Finished batch: trajectories $(traj_start)-$(traj_start + traj_count - 1)")
         println("Note: Run average_trajectories_from_collected(sim) after all batches complete.")
     end
     

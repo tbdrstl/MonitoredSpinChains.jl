@@ -509,7 +509,7 @@ end
 Convenience method: Load simulation from parameter file and prepare.
 """
 function prepare_job_array(param_file::String; data_folder::String=get(ENV, "DATA", ""))
-    params = load(param_file, "params")
+    params = load(param_file, "params"; iotype=IOStream)
     sim = create_simulation(params)
     return prepare_job_array(sim; data_folder=data_folder)
 end
@@ -588,26 +588,47 @@ function collect_data_partial(circuit::Circuit, traj_ids::Vector{Int}; data_fold
     collected_ids = Int[]
     
     with_file_lock(lockfile) do
-        jldopen(collected_file, "a+") do f
-            for trajID in traj_ids
-                file1 = circuit_to_filename(circuit, trajID, final=true)
-                if isfile(file1)
-                    key = string(hash(circuit, trajID))
-                    if !haskey(f, key)
-                        try
-                            observables = load(file1, "observables")
-                            f[key] = observables
-                            push!(collected_ids, trajID)
-                            # Delete the individual file after successful collection
-                            rm(file1)
-                        catch e
-                            @warn "Failed to collect trajectory $trajID: $e"
-                        end
-                    else
-                        # Already collected, just remove the individual file
+        # Read existing data first (JLD2 "a+" with IOStream is buggy on network FS)
+        existing_data = Dict{String, Any}()
+        if isfile(collected_file)
+            try
+                jldopen(collected_file, "r"; iotype=IOStream) do f
+                    for key in keys(f)
+                        existing_data[key] = f[key]
+                    end
+                end
+            catch e
+                @warn "Failed to read existing collected file, starting fresh: $e"
+            end
+        end
+        
+        # Collect new trajectories
+        for trajID in traj_ids
+            traj_filename = trajectory_hash_filename(circuit, trajID)
+            file1 = joinpath(circuit.result_folder, "already_computed", traj_filename)
+            if isfile(file1)
+                key = string(trajID)
+                if !haskey(existing_data, key)
+                    try
+                        observables = load(file1, "observables"; iotype=IOStream)
+                        existing_data[key] = observables
                         push!(collected_ids, trajID)
                         rm(file1)
+                    catch e
+                        @warn "Failed to collect trajectory $trajID: $e"
                     end
+                else
+                    push!(collected_ids, trajID)
+                    rm(file1)
+                end
+            end
+        end
+        
+        # Write all data to file (overwrite)
+        if !isempty(existing_data)
+            jldopen(collected_file, "w"; iotype=IOStream) do f
+                for (key, val) in existing_data
+                    f[key] = val
                 end
             end
         end
@@ -657,16 +678,16 @@ function average_trajectories_from_collected(circuit::Circuit; data_folder::Stri
     n_traj = length(computed_ids)
     sorted_ids = sort(collect(computed_ids))
     
-    jldopen(collected_file, "r") do f
+    jldopen(collected_file, "r"; iotype=IOStream) do f
         # Initialize with first trajectory
         first_id = sorted_ids[1]
-        observables = f[string(hash(circuit, first_id))]
+        observables = f[string(first_id)]
         obs2 = deepcopy(observables)
         square!(obs2)
         
         # Add remaining trajectories
         for id in sorted_ids[2:end]
-            key = string(hash(circuit, id))
+            key = string(id)
             if haskey(f, key)
                 obs = f[key]
                 add!(observables, obs)
@@ -684,7 +705,13 @@ function average_trajectories_from_collected(circuit::Circuit; data_folder::Stri
         errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(n_traj))
         
         avg_file = joinpath(average_dir, string(hash(circuit)) * ".jld2")
-        jldsave(avg_file; observables, errors, circuit, n_trajectories=n_traj, trajectory_ids=sorted_ids)
+        jldopen(avg_file, "w"; iotype=IOStream) do f
+            f["observables"] = observables
+            f["errors"] = errors
+            f["circuit"] = circuit
+            f["n_trajectories"] = n_traj
+            f["trajectory_ids"] = sorted_ids
+        end
     end
     
     return n_traj
@@ -722,20 +749,18 @@ function move_to_computed_folder(traj::Trajectory)
     file = trajectory_to_filename(traj)
     if isfile(file)
         # move file to already_computed folder
-        new_file = joinpath(traj.circuit.result_folder, "already_computed", basename(file))
-        if !isdir(joinpath(traj.circuit.result_folder, "already_computed"))
-            mkdir(joinpath(traj.circuit.result_folder, "already_computed"))
-        end
-        mv(file, new_file)
+        computed_dir = joinpath(traj.circuit.result_folder, "already_computed")
+        mkpath(computed_dir)  # mkpath handles existing dirs gracefully
+        new_file = joinpath(computed_dir, basename(file))
+        mv(file, new_file; force=true)
     end
 end
 
 function save_traj(traj::Trajectory)
     file = trajectory_to_filename(traj)
     
-    jldsave(file; traj.trajectoryID, traj.state, traj.observables, traj.current_timestep, circuit = traj.circuit)
-
-    jldopen(file,"w") do f
+    # Use IOStream instead of MmapIO to avoid Bus errors on network filesystems like WekaFS
+    jldopen(file, "w"; iotype=IOStream) do f
         f["trajectoryID"] = traj.trajectoryID
         f["state"] = traj.state
         f["observables"] = traj.observables
@@ -760,7 +785,7 @@ function load_existing_trajectory_data!(traj::Trajectory)
     if isfile(file)
         # remove file to ensure simulation continues (compute trajectory again)
         f = try 
-            load(file)
+            load(file; iotype=IOStream)
             traj.trajectoryID = f["trajectoryID"]
             traj.state = f["state"]
             traj.observables = f["observables"]
@@ -803,10 +828,19 @@ end
 
 
 function trajectory_to_filename(traj::Trajectory) ::String
-    to_hash = string(traj.trajectoryID)
-    to_hash *= string(hash(traj.circuit))
-    filename = string(hash(to_hash)) * ".jld2"
+    filename = trajectory_hash_filename(traj.circuit, traj.trajectoryID)
     return joinpath(traj.circuit.result_folder, filename)
+end
+
+"""
+    trajectory_hash_filename(circuit::Circuit, trajID::Int) -> String
+
+Compute the filename (not full path) for a trajectory file.
+This is the single source of truth for trajectory file naming.
+"""
+function trajectory_hash_filename(circuit::Circuit, trajID::Int) ::String
+    to_hash = string(trajID) * string(hash(circuit))
+    return string(hash(to_hash)) * ".jld2"
 end
 
 function circuit_to_filename(circuit::Circuit; average::Bool=false, final::Bool=false) ::String
@@ -855,30 +889,68 @@ function collect_data(sim::Simulation)
 end
 
 function collect_data(circuit::Circuit)
-    file = joinpath(circuit.result_folder, "already_computed", basename(circuit_to_filename(circuit)))
+    file = joinpath(circuit.result_folder, "already_computed", string(hash(circuit)) * ".jld2")
 
-    jldopen(file,"a+") do f
-        for trajID in 1:circuit.average
-            file1 = circuit_to_filename(circuit, trajID, final=true)
-            observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
-            if !haskey(f, string(hash(circuit, trajID)))
-                f[string(hash(circuit, trajID))] = observables
+    # Read existing data first (JLD2 "a+" with IOStream is buggy on network FS)
+    existing_data = Dict{String, Any}()
+    if isfile(file)
+        try
+            jldopen(file, "r"; iotype=IOStream) do f
+                for key in keys(f)
+                    existing_data[key] = f[key]
+                end
             end
+        catch e
+            @warn "Failed to read existing file, starting fresh: $e"
+        end
+    end
+
+    for trajID in 1:circuit.average
+        traj_filename = trajectory_hash_filename(circuit, trajID)
+        file1 = joinpath(circuit.result_folder, "already_computed", traj_filename)
+        if !haskey(existing_data, string(trajID))
+            observables = isfile(file1) ? load(file1, "observables"; iotype=IOStream) : (println(circuit); println(trajID); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
+            existing_data[string(trajID)] = observables
+        end
+    end
+
+    jldopen(file, "w"; iotype=IOStream) do f
+        for (key, val) in existing_data
+            f[key] = val
         end
     end
     remove_single_trajectories(circuit)
 end
 
 function collect_data_incomplete_ramses(circuit::Circuit)
-    file = joinpath(circuit.result_folder, "already_computed", basename(MonitoredSpinChains.circuit_to_filename(circuit)))
+    file = joinpath(circuit.result_folder, "already_computed", string(hash(circuit)) * ".jld2")
 
-    jldopen(file,"a+") do f
-        @showprogress for trajID in 1:circuit.average
-            file1 = MonitoredSpinChains.circuit_to_filename(circuit, trajID, final=true)
-            observables = try load(file1, "observables"); catch e; continue end
-            if !haskey(f, string(hash(circuit, trajID)))
-                f[string(hash(circuit, trajID))] = observables
+    # Read existing data first
+    existing_data = Dict{String, Any}()
+    if isfile(file)
+        try
+            jldopen(file, "r"; iotype=IOStream) do f
+                for key in keys(f)
+                    existing_data[key] = f[key]
+                end
             end
+        catch e
+            @warn "Failed to read existing file, starting fresh: $e"
+        end
+    end
+
+    @showprogress for trajID in 1:circuit.average
+        traj_filename = trajectory_hash_filename(circuit, trajID)
+        file1 = joinpath(circuit.result_folder, "already_computed", traj_filename)
+        observables = try load(file1, "observables"; iotype=IOStream); catch e; continue end
+        if !haskey(existing_data, string(trajID))
+            existing_data[string(trajID)] = observables
+        end
+    end
+
+    jldopen(file, "w"; iotype=IOStream) do f
+        for (key, val) in existing_data
+            f[key] = val
         end
     end
 end
@@ -905,7 +977,11 @@ function save_parameter_file(params::Dict)
         end
     end
 
-    jldsave(param_filename; params=params_to_save, packageVersion = get_package_version("MonitoredSpinChains"))
+    # Use IOStream instead of MmapIO to avoid Bus errors on network filesystems like WekaFS
+    jldopen(param_filename, "w"; iotype=IOStream) do f
+        f["params"] = params_to_save
+        f["packageVersion"] = get_package_version("MonitoredSpinChains")
+    end
 
     return 
 end
@@ -916,15 +992,17 @@ end
 
 function average_trajectories(circuit::Circuit)
 
-    file1 = circuit_to_filename(circuit, 1; final=true)
+    traj_filename1 = trajectory_hash_filename(circuit, 1)
+    file1 = joinpath(circuit.result_folder, "already_computed", traj_filename1)
     
-    observables = isfile(file1) ? load(file1, "observables") : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
+    observables = isfile(file1) ? load(file1, "observables"; iotype=IOStream) : (println(circuit); println(1); println(file1) ;throw(ArgumentError("No data for circuit $file1")))
     obs2 = deepcopy(observables)
     square!(obs2)
     for trajID in 2:circuit.average
-        file = circuit_to_filename(circuit, trajID; final=true)
+        traj_filename = trajectory_hash_filename(circuit, trajID)
+        file = joinpath(circuit.result_folder, "already_computed", traj_filename)
         if isfile(file)
-            obs = load(file, "observables")
+            obs = load(file, "observables"; iotype=IOStream)
             add!(observables, obs)
             square!(obs)
             add!(obs2, obs)
@@ -943,23 +1021,26 @@ function average_trajectories(circuit::Circuit)
 
     errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(circuit.average))
 
-    jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
+    # Use IOStream instead of MmapIO for WekaFS compatibility
+    jldopen(circuit_to_filename(circuit, 0; average=true), "w"; iotype=IOStream) do f
+        f["observables"] = observables
+        f["errors"] = errors
+        f["circuit"] = circuit
+    end
 
     return
 end
 
 # assume collect_data(circuit) has already been performend. Use the files created there to average the data
 function average_trajectories_from_collect(circuit::Circuit)
-    if !isdir(joinpath(circuit.result_folder, "average"))
-        mkdir(joinpath(circuit.result_folder, "average"))
-    end
+    mkpath(joinpath(circuit.result_folder, "average"))
     file1 = circuit_to_filename(circuit; final=true)
-    jldopen(file1,"r") do f
-        observables = f[string(hash(circuit, 1))]
+    jldopen(file1, "r"; iotype=IOStream) do f
+        observables = f[string(1)]
         obs2 = deepcopy(observables)
         obs2 = square!(obs2)
         for id in 2:circuit.average
-            obs = f[string(hash(circuit, id))]
+            obs = f[string(id)]
             add!(observables, obs)
             square!(obs)
             add!(obs2, obs)
@@ -971,31 +1052,33 @@ function average_trajectories_from_collect(circuit::Circuit)
         square!(obstothe2)
 
         errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(circuit.average))
-        jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
+        jldopen(circuit_to_filename(circuit, 0; average=true), "w"; iotype=IOStream) do ff
+            ff["observables"] = observables
+            ff["errors"] = errors
+            ff["circuit"] = circuit
+        end
     end
     return
 end
 
 function average_trajectories_from_collect_incomplete(circuit::Circuit)
-    if !isdir(joinpath(circuit.result_folder, "average"))
-        mkdir(joinpath(circuit.result_folder, "average"))
-    end
+    mkpath(joinpath(circuit.result_folder, "average"))
     file1 = circuit_to_filename(circuit; final=true)
-    jldopen(file1,"r") do f
+    jldopen(file1, "r"; iotype=IOStream) do f
         len = length(f)
         startind = 1
         for i in 1:len
-            if !haskey(f, string(hash(circuit, i)))
+            if !haskey(f, string(i))
                 continue
             end
             startind = i
         end
-        observables = f[string(hash(circuit, startind))]
+        observables = f[string(startind)]
         obs2 = deepcopy(observables)
         obs2 = square!(obs2)
         for id in startind+1:circuit.average
             try 
-                obs = f[string(hash(circuit, id))]
+                obs = f[string(id)]
                 add!(observables, obs)
                 square!(obs)
                 add!(obs2, obs)
@@ -1010,7 +1093,11 @@ function average_trajectories_from_collect_incomplete(circuit::Circuit)
         square!(obstothe2)
 
         errors = divide!(sqrt!(subtract!(obs2, obstothe2)), sqrt(len))
-        jldsave(circuit_to_filename(circuit, 0; average=true); observables, errors, circuit)
+        jldopen(circuit_to_filename(circuit, 0; average=true), "w"; iotype=IOStream) do ff
+            ff["observables"] = observables
+            ff["errors"] = errors
+            ff["circuit"] = circuit
+        end
     end
     return
 end
@@ -1042,9 +1129,7 @@ end
 =#
 
 function average_trajectories_from_collect(sim::Simulation)
-    if !isdir(joinpath(sim.params[1].result_folder, "average"))
-        mkdir(joinpath(sim.params[1].result_folder, "average"))
-    end
+    mkpath(joinpath(sim.params[1].result_folder, "average"))
     for circuit in sim.params
         average_trajectories_from_collect(circuit)
     end
@@ -1073,7 +1158,8 @@ end
 
 function remove_single_trajectories(circ::Circuit)
     for trajID in 1:circ.average
-        file = circuit_to_filename(circ, trajID; final=true)
+        traj_filename = trajectory_hash_filename(circ, trajID)
+        file = joinpath(circ.result_folder, "already_computed", traj_filename)
         if isfile(file)
             rm(file)
         end

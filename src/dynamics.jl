@@ -43,7 +43,8 @@ end
 
 function time_step!(circuit::Circuit, traj::Trajectory)#, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: Trajectory
     @unpack L, measurement = circuit
-    measurement && meas!(traj, rand(1:L))
+    # measurement && meas!(traj, rand(1:L))
+    measurement && meas!(traj, 1)
     return traj
 end
 

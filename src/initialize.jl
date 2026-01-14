@@ -192,8 +192,8 @@ function create_simulation(params::Dict; testmode::Bool=false)
 
     # normalize/prepare optional parameters
     noise_list = get(params, "noise", [L -> 0.0])
-    noise_list = [n isa Function ? n : (_ -> n) for n in noise_list]
 
+    noise_list = [n isa Function ? n : (_ -> n) for n in noise_list]
     meas_steps_list = map(normalize_step_function, params["meas_steps"])
     thermalization_list = map(normalize_step_function, params["thermalizationSteps"])
     meas_every_list = map(normalize_step_function, params["meas_every"])

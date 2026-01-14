@@ -300,10 +300,14 @@ function _average_from_file(file::String, circuit::Circuit)
 end
 
 """
-    load_averaged_results(output_file::String)
+    load_averaged_results(output_file::String; skip_failed::Bool=true)
 
 Load the results from a file created by `collect_and_average_all`.
 Returns a Dict with circuit hashes as keys and NamedTuples containing observables, errors, and circuit info.
+
+# Arguments
+- `output_file::String`: Path to the output file from `collect_and_average_all`
+- `skip_failed::Bool`: If true (default), skip circuits that failed to load. If false, throw an error.
 
 # Example
 ```julia
@@ -314,7 +318,7 @@ for (h, data) in results
 end
 ```
 """
-function load_averaged_results(output_file::String)
+function load_averaged_results(output_file::String; skip_failed::Bool=true)
     data = load(output_file; iotype=IOStream)
     
     circuit_hashes = data["circuit_hashes"]
@@ -322,6 +326,17 @@ function load_averaged_results(output_file::String)
     
     for h in circuit_hashes
         key = string(h)
+        obs_key = "$key/observables"
+        
+        # Check if this circuit has data (might have failed during collection)
+        if !haskey(data, obs_key)
+            if skip_failed
+                continue  # Skip circuits without data
+            else
+                error("No data found for circuit hash $h")
+            end
+        end
+        
         results[h] = (
             observables = data["$key/observables"],
             errors = data["$key/errors"],

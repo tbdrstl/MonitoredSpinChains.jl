@@ -61,9 +61,9 @@ function get_proj_su2(L::Int; r::Int=1, pbc::Bool=true)::Vector{SparseMatrixCSC{
     # Using formula: 1/4 ( I - X_i X_j - Y_i Y_j - Z_i Z_j )
     function two_site_projector(i::Int, j::Int)
         # Blocks: left, site i, middle gap, site j, right
-        left  = i>1       ? speye(2^(i-1))          : speye(1)
+        left  = i > 1         ? speye(2^(i-1))      : speye(1)
         gap   = j - i - 1 > 0 ? speye(2^(j-i-1))    : speye(1)
-        right = j < L     ? speye(2^(L-j))          : speye(1)
+        right = j < L         ? speye(2^(L-j))      : speye(1)
 
         XiXj = left ⊗ X ⊗ gap ⊗ X ⊗ right
         YiYj = left ⊗ Y ⊗ gap ⊗ Y ⊗ right

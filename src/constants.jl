@@ -80,6 +80,7 @@ const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
 const legal_observables = [:OP, :EE, :M, :MX, :EEfin, :OPH, :OPQ]
 const legal_feedbacks = [:Id, :Z]
 const legal_models = ["fredkin", "motzkin", "su2", "aklt"]
+const legal_unitarySetups = [:twoSpinHaar, :singleSpinHaar, :noProj, :su2symmetric]
 const required_params = [   "systemSize", 
                             "meas_steps", 
                             "average", 

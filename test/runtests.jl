@@ -9,8 +9,9 @@ import MonitoredSpinChains: mpiexec
 
 # p = @time run(`$(mpiexec()) -n $nworker $(Base.julia_cmd()) --check-bounds=no full_sim.jl`)
 
-# include("normalization.jl")
+include("normalization.jl")
 # include("full_sim.jl")
 # include("fs1.jl")
 include("general_projectors.jl")
+include("unitary.jl")
 # include("benchmark_meas_fredkin.jl")

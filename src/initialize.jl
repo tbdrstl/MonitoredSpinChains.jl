@@ -201,11 +201,14 @@ function create_simulation(params::Dict; testmode::Bool=false)
     # create Simulation struct and fill it with Circuits
     vector_of_circuits = Vector{Circuit}(undef, 0)
 
+    unitaryRate_list = get(params, "unitaryRate", [0.0])
+    unitarySetup_list = get(params, "unitarySetup", [:noProj])
+
     for (_,systemSize) in enumerate(params["systemSize"]),
         (_,meas_steps) in enumerate(meas_steps_list),
         (_,average) in enumerate(params["average"]),
-        # (_,unitaryRate) in enumerate(params["unitaryRate"]),
-        # (_,unitarySetup) in enumerate(params["unitarySetup"]),
+        (_,unitaryRate) in enumerate(unitaryRate_list),
+        (_,unitarySetup) in enumerate(unitarySetup_list),
         (_,bc) in enumerate(params["bc"]),
         (_,initialState) in enumerate(params["initialState"]),
         (_,measurement) in enumerate(params["measurement"]),
@@ -223,8 +226,8 @@ function create_simulation(params::Dict; testmode::Bool=false)
             systemSize,
             meas_steps(systemSize),
             average,
-            # unitaryRate,
-            # unitarySetup,
+            Float64(unitaryRate),
+            unitarySetup,
             bc,
             normalized_initial,
             measurement,

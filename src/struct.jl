@@ -15,8 +15,8 @@ struct Circuit
     L                       ::Int
     meas_steps              ::Int
     average                 ::Int
-    # unitaryRate             ::A where A<:Real
-    # unitarySetup            ::Symbol
+    unitaryRate             ::Float64
+    unitarySetup            ::Symbol
     bc                      ::Symbol
     initialState            ::Function
     measurement             ::Bool

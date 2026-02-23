@@ -35,16 +35,24 @@ function thermalize!(traj::Trajectory)
 end
 
 function time_step!(traj::Trajectory) :: Trajectory
-    # unitarySteps = ceil(Int, traj.circuit.unitaryRate)
-    # unitaryTimeEvolProb = traj.circuit.unitaryRate / unitarySteps
+    unitarySteps = ceil(Int, traj.circuit.unitaryRate)
+    unitaryTimeEvolProb = traj.circuit.unitaryRate / unitarySteps
 
-    time_step!(traj.circuit, traj)#, unitaryTimeEvolProb, unitarySteps)
+    time_step!(traj.circuit, traj, unitaryTimeEvolProb, unitarySteps)
 end
 
-function time_step!(circuit::Circuit, traj::Trajectory)#, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: Trajectory
+function time_step!(circuit::Circuit, traj::Trajectory, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: Trajectory
     @unpack L, measurement = circuit
-    # measurement && meas!(traj, rand(1:L))
-    measurement && meas!(traj, 1)
+
+    # unitary gates
+    for __ in 1:unitarySteps
+        if rand() < unitaryTimeEvolProb
+            random_unitary!(traj.state, circuit, rand(1:L), traj.projectors)
+        end
+    end
+
+    # measurement with feedback (if enabled)
+    measurement && meas!(traj, rand(1:L))
     return traj
 end
 
@@ -56,7 +64,7 @@ function meas!(traj::Trajectory, site::Int)
         traj.state .= Ppsi/sqrtProb
 
         # false not correction if measurement outcome is singlet
-        if rand() < (1.0+exp(-traj.circuit.noise))/2.
+        if (rand() < (1.0+exp(-traj.circuit.noise))/2.) && (site == 1)
             correct!(traj,site)
         end
     else
@@ -376,4 +384,166 @@ meas_fast_fredkin!(traj::Trajectory, site::Int) = meas!(traj, site)
         end
     end
     return p
+end
+
+# Haar random unitaries with various projection schemes
+
+function random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circuit, site::Int64, Projectors::Vector{SparseMatrixCSC{ComplexF64, Int64}}) #:: Array{ComplexF64}
+    specific_random_unitary!(psi, circuit, circuit.unitarySetup, site, Projectors)
+end
+
+specific_random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circuit, unitarySetup::Symbol, site::Int64, Projectors::Vector{SparseMatrixCSC{ComplexF64, Int64}}) = 
+specific_random_unitary!(psi, circuit, Val{unitarySetup}, site, Projectors)
+
+function specific_random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circuit, ::Type{Val{:su2symmetric}}, site::Int64, Projectors::Vector{SparseMatrixCSC{ComplexF64, Int64}})
+    return random_su2_gate!(psi, circuit.L, site)
+end
+
+function specific_random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circuit, ::Type{Val{:singleSpinHaar}}, site::Int64, Projectors::Vector{SparseMatrixCSC{ComplexF64, Int64}})
+    if site  == circuit.L
+        Ppsi = Projectors[1] * psi
+        if :AncillaMutualInformation in circuit.observables
+            psi .= (speye(2^(site - 1)) ⊗ haar_measure(2) ⊗ speye(2^(circuit.L - site + 2))) * Ppsi + psi - Ppsi
+        else
+            psi .= (speye(2^(site - 1)) ⊗ haar_measure(2) ⊗ speye(2^(circuit.L - site))) * Ppsi + psi - Ppsi
+        end
+    else 
+        Ppsi = Projectors[site+1] * psi
+        if :AncillaMutualInformation in circuit.observables
+            psi .= (speye(2^(site - 1)) ⊗ haar_measure(2) ⊗ speye(2^(circuit.L - site + 2))) * Ppsi + psi - Ppsi
+        else
+            psi .= (speye(2^(site - 1)) ⊗ haar_measure(2) ⊗ speye(2^(circuit.L - site))) * Ppsi + psi - Ppsi
+        end
+    end
+    # return psi
+end
+
+function specific_random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circuit, ::Type{Val{:twoSpinHaar}}, site::Int64, Projectors::Vector{SparseMatrixCSC{ComplexF64, Int64}})
+    Ppsi = Vector{ComplexF64}(undef, 2^circuit.L)
+    if site == circuit.L
+        Ppsi .= Projectors[1] * psi
+    else 
+        Ppsi .= Projectors[site+1] * psi
+    end
+
+    if :AncillaMutualInformation in circuit.observables
+        psi .= (random_haar(site,circuit.L)⊗speye(4)) * Ppsi + psi - Ppsi
+    else
+        psi .= random_haar(site,circuit.L) * Ppsi + psi - Ppsi
+    end
+    # return psi
+end
+
+function specific_random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circuit, ::Type{Val{:noProj}}, site::Int64, Projectors::Vector{SparseMatrixCSC{ComplexF64, Int64}})
+    if :AncillaMutualInformation in circuit.observables
+        psi .= (random_haar(site,circuit.L) ⊗ speye(4)) * psi
+    else
+        psi .= random_haar(site,circuit.L) * psi
+    end
+    # return psi
+end
+
+function random_haar(site::Int,L::Int) :: AbstractMatrix{ComplexF64}
+    U4 = haar_measure(4)
+    
+    # n = size(U4, 1) ÷ 2
+    @views quadrants = (
+        U4[1:2, 1:2],       # Top Left
+        U4[3:end, 1:2],   # Bottom Left
+        U4[1:2, 3:end],   # Top Right
+        U4[3:end, 3:end] # Bottom Right
+    )
+    
+    if site+3<=L 
+        return random_haar_bulk(site,L,quadrants)
+    elseif site+3==L+1
+        return random_haar_UB_other_side(L, quadrants)
+    elseif site+3 == L+2
+        return random_haar_proj_splitted(L, quadrants)
+    else #site+3 == L+3 
+        return random_haar_proj_other_side(L, quadrants)
+    end
+end
+
+function just_random_haar_splitted(L::Int)
+    U4 = haar_measure(4)
+    
+    # n = size(U4, 1) ÷ 2
+    @views quadrants = (
+        U4[1:2, 1:2],       # Top Left
+        U4[3:end, 1:2],   # Bottom Left
+        U4[1:2, 3:end],   # Top Right
+        U4[3:end, 3:end] # Bottom Right
+    )
+
+    UH = spzeros(ComplexF64,2^L,2^L)
+    @fastmath @inbounds for (idx, quadrant) in enumerate(quadrants)
+        a = zeros(2,2)
+        a[idx] = 1.
+
+        UH .+= quadrant ⊗ speye(2^(L-2)) ⊗ a
+    end
+    return UH
+end
+
+function random_haar_bulk(site::Int, L::Int, quadrants::NTuple{4, SubArray{ComplexF64, 2, Matrix{ComplexF64}, Tuple{UnitRange{Int64}, UnitRange{Int64}}, false}})
+    UH = spzeros(ComplexF64,2^4,2^4)
+    @fastmath @inbounds for (idx, quadrant) in enumerate(quadrants)
+        a = zeros(2,2)
+        a[idx] = 1.
+
+        UH .+= a ⊗ speye(4) ⊗ quadrant
+    end
+    return speye(2^(site-1)) ⊗ UH ⊗ speye(2^(L-site-3))
+end
+
+function random_haar_UB_other_side(L::Int,quadrants::NTuple{4, SubArray{ComplexF64, 2, Matrix{ComplexF64}, Tuple{UnitRange{Int64}, UnitRange{Int64}}, false}})
+    UH = spzeros(ComplexF64,2^(L-2),2^(L-2))
+    for (idx, quadrant) in enumerate(quadrants)
+        a = zeros(2,2)
+        a[idx] = 1.
+
+        UH += quadrant ⊗ speye(2^(L-4)) ⊗ a
+    end
+    return UH⊗ speye(4)
+end
+
+function random_haar_proj_other_side(L::Int,quadrants::NTuple{4, SubArray{ComplexF64, 2, Matrix{ComplexF64}, Tuple{UnitRange{Int64}, UnitRange{Int64}}, false}})
+    UH = spzeros(ComplexF64,2^(L-2),2^(L-2))
+    @fastmath @inbounds for (idx, quadrant) in enumerate(quadrants)
+        a = zeros(2,2)
+        a[idx] = 1.
+
+        UH .+=  quadrant ⊗ speye(2^(L-4)) ⊗ a
+    end
+    return speye(4) ⊗ UH
+end
+
+# function random_haar_proj_splitted(L::Int,quadrants::NTuple{4, SubArray{ComplexF64, 2, Matrix{ComplexF64}, Tuple{UnitRange{Int64}, UnitRange{Int64}}, false}})
+#     UH = spzeros(ComplexF64,2^L,2^L)
+#     @fastmath @inbounds for (idx, quadrant) in enumerate(quadrants)
+#         a = zeros(2,2)
+#         a[idx] = 1.
+
+#         UH .+= speye(2) ⊗ quadrant ⊗ speye(2^(L-4)) ⊗ a ⊗ speye(2)
+#     end
+#     return UH
+# end
+
+function random_haar_proj_splitted(L::Int,quadrants::NTuple{4, SubArray{ComplexF64, 2, Matrix{ComplexF64}, Tuple{UnitRange{Int64}, UnitRange{Int64}}, false}})
+    UH = spzeros(ComplexF64,2^(L-2),2^(L-2))
+    for (idx, quadrant) in enumerate(quadrants)
+        a = zeros(ComplexF64,2,2)
+        a[idx] = 1.
+
+        UH +=  quadrant ⊗ speye(2^(L-4)) ⊗ a 
+    end
+    return speye(2) ⊗ UH ⊗ speye(2)
+end
+
+function haar_measure(n::Int) :: Matrix{ComplexF64}
+    z = randn(ComplexF64,n,n)/sqrt(2)
+    q,r = qr(z)
+    r./=abs.(r)
+    return q * Diagonal(r)
 end

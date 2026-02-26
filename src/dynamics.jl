@@ -541,9 +541,22 @@ function random_haar_proj_splitted(L::Int,quadrants::NTuple{4, SubArray{ComplexF
     return speye(2) ⊗ UH ⊗ speye(2)
 end
 
-function haar_measure(n::Int) :: Matrix{ComplexF64}
-    z = randn(ComplexF64,n,n)/sqrt(2)
-    q,r = qr(z)
-    r./=abs.(r)
-    return q * Diagonal(r)
+# function haar_measure(n::Int) :: Matrix{ComplexF64}
+#     z = randn(ComplexF64,n,n)/sqrt(2)
+#     q,r = qr(z)
+#     r./=abs.(r)
+#     return q * Diagonal(r)
+# end
+
+function haar_measure(n::Int)::Matrix{ComplexF64}
+    Z = randn(ComplexF64, n, n)                 
+    F = qr!(Z)                                  
+    Q = Matrix(F.Q)                              
+    d = diag(F.R)                                
+    @inbounds for j in 1:n
+        dj = d[j]
+        phase = dj == 0 ? one(dj) : dj/abs(dj)  
+        @views Q[:, j] .*= phase
+    end
+    return Q
 end

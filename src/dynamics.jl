@@ -554,9 +554,17 @@ function haar_measure(n::Int)::Matrix{ComplexF64}
     Q = Matrix(F.Q)                              
     d = diag(F.R)                                
     @inbounds for j in 1:n
-        dj = d[j]
-        phase = dj == 0 ? one(dj) : dj/abs(dj)  
-        @views Q[:, j] .*= phase
+        s = sign(d[j])
+        @views Q[:, j] .*= s
     end
     return Q
+end
+
+# random U(1) preserving gate according to 10.1103/PhysRevX.12.041002
+function u1_preserving_2qubit_haar()::Matrix{ComplexF64}
+    U = spzeros(ComplexF64,4,4)
+    U[1,1] = haar_measure(1)[1,1]  # 00 -> 00
+    U[4,4] = haar_measure(1)[1,1]  # 11 -> 11
+    U[2:3, 2:3] = haar_measure(2)  # (01,10) -> (01,10)
+    return U
 end

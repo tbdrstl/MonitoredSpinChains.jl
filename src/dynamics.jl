@@ -419,10 +419,13 @@ function specific_random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circ
 end
 
 function specific_random_unitary!(psi::AbstractVector{ComplexF64}, circuit::Circuit, ::Type{Val{:twoSpinHaar}}, site::Int64, Projectors::Vector{SparseMatrixCSC{ComplexF64, Int64}})
+    circuit.L < 4 && return
+    circuit.bc == :obc && site > circuit.L - 3 && return
+
     Ppsi = Vector{ComplexF64}(undef, 2^circuit.L)
     if site == circuit.L
         Ppsi .= Projectors[1] * psi
-    else 
+    else
         Ppsi .= Projectors[site+1] * psi
     end
 

@@ -41,7 +41,7 @@ end
     thermalized     ::Bool
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
     # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
@@ -52,7 +52,7 @@ end
     thermalized     ::Bool
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
     # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
@@ -63,7 +63,7 @@ end
     thermalized     ::Bool
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
     # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 
@@ -74,7 +74,7 @@ end
     thermalized     ::Bool
     observables     ::Union{Missing,Observables} = missing
     state           ::Union{Missing,AbstractVector{<:Union{Float64, ComplexF64}}} = missing
-    projectors      ::Union{Missing,Vector{SparseMatrixCSC{Float64, Int}}} = missing
+    projectors      ::Union{Missing,Vector{SparseMatrixCSC{ComplexF64, Int}}} = missing
     # zFeedbackIndices ::Union{Missing,Vector{Vector{Int32}}} = missing
 end
 

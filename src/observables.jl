@@ -162,6 +162,23 @@ function magnetization(traj::SpinHalfTrajectory)
     return M, varM
 end
 
+function magnetization(L::Int, state::AbstractVector{T}) where {T<:Union{Float64, ComplexF64}}
+    M = 0.0
+    varM = 0.0
+
+
+    @fastmath @inbounds for site in 1:L
+        m = 0.5*dot(state, speye(2^(site - 1)) ⊗ Z ⊗ speye(2^(L - site)), state)
+        
+        M += m
+        varM += m^2
+    end
+    M = real(M) / L
+    varM = real(varM) / L - M^2
+
+    return M, varM
+end
+
 function magnetization(traj::SpinOneTrajectory)
     @unpack L = traj.circuit
 

@@ -386,11 +386,15 @@ function compute_missing_parameters!(traj::SpinHalfTrajectory)
         traj.state = traj.circuit.initialState(traj.circuit.L)
     end
 
+    if traj.circuit.unitaryRate > 0 && !(traj.state isa Vector{ComplexF64})
+        traj.state = convert(Vector{ComplexF64}, traj.state)
+    end
+
     # if ismissing(traj.zFeedbackIndices)
     #     traj.zFeedbackIndices = feedbackIndices(traj.circuit)
     # end
 
-    return 
+    return
 end
 
 function swapEntries!(x::AbstractVector{T},i::Int,j::Int) where {T <: Union{Float64, ComplexF64}}

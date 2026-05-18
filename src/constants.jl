@@ -80,8 +80,8 @@ const sz = [0 0 1; 0 1 0; 1 0 0 ] |> SparseMatrixCSC{ComplexF64, Int64}
 const legal_observables = [:OP, :EE, :M, :MX, :EEfin, :OPH, :OPQ]
 const legal_feedbacks = [:Id, :Z]
 const legal_models = ["fredkin", "motzkin", "su2", "aklt"]
-const required_params = [   "name", 
-                            "systemSize", 
+const legal_unitarySetups = [:twoSpinHaar, :singleSpinHaar, :noProj, :su2symmetric]
+const required_params = [   "systemSize", 
                             "meas_steps", 
                             "average", 
                             "bc", 
@@ -94,6 +94,13 @@ const required_params = [   "name",
                             "thermalizationSteps", 
                             "meas_every",
                             "model"]
+
+# Hashing helpers: fields that should not affect circuit identity (run logistics)
+const VOLATILE_FIELDS = (:average, :trajectories_averaged, :result_folder)
+
+# Hashing helpers: optional defaults that, when matched, are omitted from the hash
+# Extend this as you add new optional physics parameters with a true "no-op" default
+const DEFAULT_FIELD_VALUES = Dict{Symbol,Any}()
 
 const anomalousstatepath = joinpath(homedir(),".julia/data/fredkin_pbc_anomalous_ground_states")
 const dickestatepath = joinpath(homedir(),".julia/data/dickeStates")

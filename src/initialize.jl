@@ -192,35 +192,44 @@ function create_simulation(params::Dict; testmode::Bool=false)
 
     # normalize/prepare optional parameters
     noise_list = get(params, "noise", [L -> 0.0])
+
     noise_list = [n isa Function ? n : (_ -> n) for n in noise_list]
+    meas_steps_list = map(normalize_step_function, params["meas_steps"])
+    thermalization_list = map(normalize_step_function, params["thermalizationSteps"])
+    meas_every_list = map(normalize_step_function, params["meas_every"])
 
     # create Simulation struct and fill it with Circuits
     vector_of_circuits = Vector{Circuit}(undef, 0)
 
+    unitaryRate_list = get(params, "unitaryRate", [0.0])
+    unitarySetup_list = get(params, "unitarySetup", [:noProj])
+
     for (_,systemSize) in enumerate(params["systemSize"]),
-        (_,meas_steps) in enumerate(params["meas_steps"]),
+        (_,meas_steps) in enumerate(meas_steps_list),
         (_,average) in enumerate(params["average"]),
-        # (_,unitaryRate) in enumerate(params["unitaryRate"]),
-        # (_,unitarySetup) in enumerate(params["unitarySetup"]),
+        (_,unitaryRate) in enumerate(unitaryRate_list),
+        (_,unitarySetup) in enumerate(unitarySetup_list),
         (_,bc) in enumerate(params["bc"]),
         (_,initialState) in enumerate(params["initialState"]),
         (_,measurement) in enumerate(params["measurement"]),
         (_,feedback) in enumerate(params["feedback"]),
         (_,noise) in enumerate(noise_list),
         (_,trajectories_averaged) in enumerate(params["trajectories_averaged"]),
-        (_,thermalizationSteps) in enumerate(params["thermalizationSteps"]),
-        (_,meas_every) in enumerate(params["meas_every"]),
+        (_,thermalizationSteps) in enumerate(thermalization_list),
+        (_,meas_every) in enumerate(meas_every_list),
         (_,model) in enumerate(params["model"])
 
-        
+
+        normalized_initial = normalize_initial_state(initialState)
+
         push!(vector_of_circuits, Circuit(
             systemSize,
             meas_steps(systemSize),
             average,
-            # unitaryRate,
-            # unitarySetup,
+            Float64(unitaryRate),
+            unitarySetup,
             bc,
-            initialState,
+            normalized_initial,
             measurement,
             feedback,
             noise(systemSize),
@@ -236,7 +245,7 @@ function create_simulation(params::Dict; testmode::Bool=false)
     unique!(vector_of_circuits)
     check_if_circuit_is_already_computed!(vector_of_circuits; testmode=testmode)
 
-    return Simulation(params["name"], vector_of_circuits, params)
+    return Simulation(vector_of_circuits, params)
 end
 
 function get_trajectories_from_simulation(sim::Simulation; state::Bool=false, projectors::Bool=false, feedbackIdx::Bool=false)
@@ -367,11 +376,15 @@ function compute_missing_parameters!(traj::SpinHalfTrajectory)
         traj.state = traj.circuit.initialState(traj.circuit.L)
     end
 
+    if traj.circuit.unitaryRate > 0 && !(traj.state isa Vector{ComplexF64})
+        traj.state = convert(Vector{ComplexF64}, traj.state)
+    end
+
     # if ismissing(traj.zFeedbackIndices)
     #     traj.zFeedbackIndices = feedbackIndices(traj.circuit)
     # end
 
-    return 
+    return
 end
 
 function swapEntries!(x::AbstractVector{T},i::Int,j::Int) where {T <: Union{Float64, ComplexF64}}

@@ -1,11 +1,16 @@
 export rand_spinhalf_im,
-        rand_spinone_im,
-        rand_spinhalf_real,
-        rand_spinone_real,
-        neelState,
-        anomalous_ground_state,
-        flat_spin1,
-        generalized_dicke
+    rand_spinone_im,
+    rand_spinhalf_real,
+    rand_spinone_real,
+    neelState,
+    anomalous_ground_state,
+    flat_spin1,
+    generalized_dicke,
+    normalize_initial_state,
+    serialize_initial_state,
+    normalize_step_function,
+    serialize_step_function,
+    StepFunction
 
 
 function rand_spinhalf_im(L::Int)
@@ -200,3 +205,110 @@ function fredkin_stationary_state(L::Int)
 end
 
 f_stat_ent(L) = entanglement_entropy_general(fredkin_stationary_state(L), 1:div(L,2))
+
+# Registry mapping short names to initial-state constructors. Placed after
+# definitions to avoid forward-reference issues during module initialization.
+const INITIAL_STATE_REGISTRY = Dict(
+    "rand_spinhalf_im"           => rand_spinhalf_im,
+    "rand_spinone_im"            => rand_spinone_im,
+    "rand_spinhalf_real"         => rand_spinhalf_real,
+    "rand_spinone_real"          => rand_spinone_real,
+    "neelState"                  => neelState,
+    "neelState1"                 => neelState1,
+    "flat_spin1"                 => flat_spin1,
+    "fredkin_stationary_state"   => fredkin_stationary_state,
+)
+
+# Inverse lookup for serialization
+const INV_INITIAL_STATE_REGISTRY = Dict(v => k for (k, v) in INITIAL_STATE_REGISTRY)
+
+"""Normalize an initial-state identifier into a callable function."""
+function normalize_initial_state(x)
+    if x isa Function
+        return x
+    elseif x isa Symbol
+        haskey(INITIAL_STATE_REGISTRY, String(x)) || error("Unknown initial state identifier: $(x)")
+        return INITIAL_STATE_REGISTRY[String(x)]
+    elseif x isa AbstractString
+        haskey(INITIAL_STATE_REGISTRY, x) || error("Unknown initial state identifier: $(x)")
+        return INITIAL_STATE_REGISTRY[x]
+    else
+        error("Unsupported initial state type: $(typeof(x))")
+    end
+end
+
+"""Serialize a known initial-state function back to its registry key."""
+function serialize_initial_state(f::Function)
+    haskey(INV_INITIAL_STATE_REGISTRY, f) || error("Initial state function not in registry: $(f)")
+    return INV_INITIAL_STATE_REGISTRY[f]
+end
+
+# Wrapper to carry a serializable spec for step-like functions (meas_steps, thermalizationSteps, meas_every)
+struct StepFunction{F}
+    f::F
+    spec::NamedTuple
+end
+
+(sf::StepFunction)(L::Int) = sf.f(L)
+
+Base.hash(sf::StepFunction, h::UInt) = hash(sf.spec, h)
+Base.show(io::IO, sf::StepFunction) = print(io, "StepFunction(", sf.spec, ")")
+
+"""Normalize a step spec into a callable StepFunction.
+
+Supported specs (all serializable by JLD2):
+  - Number: treated as constant → coeff=number, power=0, divisor=1
+  - NamedTuple/Dict with keys :power (default 0), :divisor (default 1), :coeff (default 1)
+  - Function: allowed in-memory; serialization will fail unless expressed as a spec
+"""
+function normalize_step_function(x)
+    if x isa StepFunction
+        return x
+    elseif x isa Number
+        spec = (; power=0, divisor=1, coeff=x)
+        return StepFunction(_ -> x, spec)
+    elseif x isa NamedTuple
+        spec = canonical_step_spec(x)
+        return StepFunction(step_callable(spec), spec)
+    elseif x isa Dict
+        spec = canonical_step_spec(NamedTuple(Symbol(k) => v for (k,v) in x))
+        return StepFunction(step_callable(spec), spec)
+    elseif x isa Function
+        spec = (; kind=:raw_function, name=string(x))
+        return StepFunction(x, spec)
+    else
+        error("Unsupported step-function type: $(typeof(x))")
+    end
+end
+
+"""Serialize a step function or spec into a JLD2-safe object."""
+function serialize_step_function(x)
+    sf = x isa StepFunction ? x : normalize_step_function(x)
+    spec = sf.spec
+
+    if spec isa NamedTuple
+        if haskey(spec, :kind) && spec.kind == :raw_function
+            error("Cannot serialize arbitrary function $(spec.name); provide a (power, divisor, coeff) spec instead")
+        end
+        return spec
+    else
+        error("Unsupported step-function spec for serialization: $(spec)")
+    end
+end
+
+# Normalize and validate a step spec into (power, divisor, coeff)
+function canonical_step_spec(spec::NamedTuple)
+    p = get(spec, :power, 0)
+    d = get(spec, :divisor, 1)
+    c = get(spec, :coeff, 1)
+    d == 0 && error("divisor must be nonzero")
+    return (; power=p, divisor=d, coeff=c)
+end
+
+# Build callable for a given spec
+function step_callable(spec::NamedTuple)
+    p = spec.power
+    d = spec.divisor
+    c = spec.coeff
+    return (L -> c*div(L^p, d))
+end

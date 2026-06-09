@@ -8,9 +8,9 @@ function save_trajectory(traj::Trajectory)
         save_traj(traj)
     end
     # do not save small trajectories inbetween. They run very fast anyways
-    # if traj.circuit.L > 12 && traj.current_timestep % 30 == 0
-    #     save_traj(traj)
-    # end
+    if traj.circuit.L > 12 && traj.current_timestep % 30 == 0
+        save_traj(traj)
+    end
 end
 
 function move_to_computed_folder(traj::Trajectory)

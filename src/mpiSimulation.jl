@@ -29,19 +29,21 @@ function simulate(sim::Simulation)
     #     return
     # end
 
+    sim_name = get(sim.params_dict, "name", sim.params_dict["result_folder"])
+
     MPI.Barrier(comm)
     if rank == root
         save_parameter_file(sim)
-        println("Starting $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers...")
+        println("Starting $(sim_name) with $(ntrajectories) trajectories on $(nworkers) workers...")
     end
-    
+
     if world_size == 1
         @showprogress for t in trajectories
             run_trajectory!(t)
         end
         collect_data(sim)
         average_trajectories_from_collect(sim)
-        println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
+        println("Finished $(sim_name) with $(ntrajectories) trajectories on $(nworkers) workers.")
 
         MPI.Finalize()
 
@@ -72,14 +74,22 @@ function simulate(sim::Simulation)
         worker_ntrajectories = length(trajectories)
 
         # make one worker show its progressbar
-        if rank == 1 
+        if rank == 1
             @showprogress "Progress worker 1:" for t in 1:worker_ntrajectories
-                run_trajectory!(trajectories[1])
+                try
+                    run_trajectory!(trajectories[1])
+                catch e
+                    println("Rank $rank: run_trajectory! failed: $e\n", stacktrace(catch_backtrace()))
+                end
                 popfirst!(trajectories)
             end
         else
             for t in 1:worker_ntrajectories
-                run_trajectory!(trajectories[1])
+                try
+                    run_trajectory!(trajectories[1])
+                catch e
+                    println("Rank $rank: run_trajectory! failed: $e\n", stacktrace(catch_backtrace()))
+                end
                 popfirst!(trajectories)
             end
         end
@@ -103,7 +113,11 @@ function simulate(sim::Simulation)
         todo = MPI.recv(comm)
         circs = sim.params[todo]
         for circuit in circs
-            collect_data(circuit)
+            try
+                collect_data(circuit)
+            catch e
+                println("Rank $rank: collect_data failed for circuit $(circuit.result_folder): $e")
+            end
         end
     end
 
@@ -113,7 +127,7 @@ function simulate(sim::Simulation)
     if rank == root
         println("Averaging data...")
         @time average_trajectories_from_collect(sim)
-        println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
+        println("Finished $(sim_name) with $(ntrajectories) trajectories on $(nworkers) workers.")
     end
     
     MPI.Barrier(comm)
@@ -136,9 +150,10 @@ function simulate_many_traj(sim::Simulation; repeat::Int=100)
     nworkers = world_size - 1
 
     root = 0
+    sim_name = get(sim.params_dict, "name", sim.params_dict["result_folder"])
 
     # println("MPI successfully initialized on $(rank) of $(world_size) workers.")
-    
+
     for iteration in 1:repeat
         # collect all trajectories
         trajectories = get_trajectories_from_simulation(sim)
@@ -147,15 +162,15 @@ function simulate_many_traj(sim::Simulation; repeat::Int=100)
         MPI.Barrier(comm)
         if rank == root
             save_parameter_file(sim)
-            println("Starting $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers...")
+            println("Starting $(sim_name) with $(ntrajectories) trajectories on $(nworkers) workers...")
         end
-        
+
         if world_size == 1
             for i in 1:ntrajectories
                 run_trajectory!(trajectories[i])
             end
             collect_data_job_array(sim, iteration)
-            println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
+            println("Finished $(sim_name) with $(ntrajectories) trajectories on $(nworkers) workers.")
 
             MPI.Finalize()
 
@@ -197,8 +212,7 @@ function simulate_many_traj(sim::Simulation; repeat::Int=100)
         if rank == root
             collect_data_job_array(sim, iteration)
             clean_after_you(sim.params)
-            # println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers.")
-            println("Finished $(sim.name) with $(ntrajectories) trajectories on $(nworkers) workers, iteration $(iteration).")
+            println("Finished $(sim_name) with $(ntrajectories) trajectories on $(nworkers) workers, iteration $(iteration).")
         end
         
         MPI.Barrier(comm)

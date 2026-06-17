@@ -1,5 +1,6 @@
 export remove_corrupted_trajectories,
-average_trajectories_from_collect
+average_trajectories_from_collect,
+recover_trajectory_filenames
 
 
 # save trajectory to file only every 10th timestep to avoid IO overhead
@@ -96,9 +97,7 @@ end
 
 
 function trajectory_to_filename(traj::Trajectory) ::String
-    to_hash = string(traj.trajectoryID)
-    to_hash *= string(hash(traj.circuit))
-    filename = string(hash(to_hash)) * ".jld2"
+    filename = string(hash(traj.circuit, traj.trajectoryID)) * ".jld2"
     return joinpath(traj.circuit.result_folder, filename)
 end
 
@@ -354,6 +353,23 @@ function get_package_version()
         end
     end
     return "Package not found"
+end
+
+function recover_trajectory_filenames(circuit::Circuit)
+    for trajID in 1:circuit.average
+        old_hash = hash(string(trajID) * string(hash(circuit)))
+        old_file = joinpath(circuit.result_folder, "already_computed", string(old_hash) * ".jld2")
+        new_file = circuit_to_filename(circuit, trajID; final=true)
+        if isfile(old_file) && !isfile(new_file)
+            mv(old_file, new_file)
+        end
+    end
+end
+
+function recover_trajectory_filenames(sim::Simulation)
+    for circuit in sim.params
+        recover_trajectory_filenames(circuit)
+    end
 end
 
 function remove_single_trajectories(circ::Circuit)

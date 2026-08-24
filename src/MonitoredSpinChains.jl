@@ -27,6 +27,14 @@ module MonitoredSpinChains
             get_trajectories_from_simulation,
             get_trajectories_from_circuit,
             get_projectors,
+            applyX!,
+            applyY!,
+            applyZ!,
+            apply_pauli!,
+            apply_pauli_noise!,
+            apply_kick!,
+            normalize_noise,
+            total_witness,
             ⊗
 
     include("struct.jl")

@@ -12,6 +12,7 @@ function get_observables!(traj::Trajectory)
         obs == :MX && (traj.observables.magnetizationX[current_meas_step, :] .= magnetizationX(traj))
         obs == :OPH && (traj.observables.total_proj_half[current_meas_step, :] .= projector_stats_r(traj, div(traj.circuit.L,2)))
         obs == :OPQ && (traj.observables.total_proj_quarter[current_meas_step, :] .= projector_stats_r(traj, div(traj.circuit.L,4)))
+        obs == :W && (traj.observables.witness[current_meas_step] = total_witness(traj))
 
         if obs == :EEfin && traj.current_timestep == traj.circuit.meas_steps*traj.circuit.meas_every
             # Calculate the entanglement entropy for the final state
@@ -36,12 +37,176 @@ function get_observables(circuit::Circuit)::Observables
         obs == :EEfin && (observables.entanglement_entropy = zeros(div(circuit.L,2)))
         obs == :OPH && (observables.total_proj_half = zeros(circuit.meas_steps,3))
         obs == :OPQ && (observables.total_proj_quarter = zeros(circuit.meas_steps,3))
+        obs == :W && (observables.witness = zeros(circuit.meas_steps))
     end
     return observables
 end
 
+"""
+    total_witness(traj) -> Float64
+
+The preparation witness `W = Σ_{i<j} ⟨P̂_ij⟩` of Eq. (34), summed over all
+`L(L-1)/2` unordered pairs.
+
+Evaluated through the collective-spin identity of Eq. (56),
+
+    Ŵ = ½ [ J_max(J_max + 1) − Ĵ² ],    J_max = L/2,
+
+which replaces the O(L²) sum of pair projectors by three global spin operators.
+Writing `Ĵ² = (Ĵᶻ)² + ½(Ĵ⁺Ĵ⁻ + Ĵ⁻Ĵ⁺)` and using `(Ĵ^±)† = Ĵ^∓`,
+
+    ⟨Ĵ²⟩ = ⟨(Ĵᶻ)²⟩ + ½ ( ‖Ĵ⁻ψ‖² + ‖Ĵ⁺ψ‖² ),
+
+so this costs O(L·2^L) with one scratch vector instead of O(L²·2^L).
+
+`W` vanishes on the permutation-symmetric (Dicke) manifold and grows with
+leakage out of it; the certified infidelity is `ε_cert = 2W/L`, Eq. (103).
+
+Note `Ŵ` is a *linear* observable, so averaging `⟨ψ|Ŵ|ψ⟩` over trajectories
+gives `Tr[ρ̂Ŵ]` exactly — no unravelling bias.
+"""
+function total_witness(traj::SpinHalfTrajectory)
+    L = traj.circuit.L
+    psi = traj.state
+    length(psi) == 1 << L || error(
+        "total_witness: state has length $(length(psi)), expected 2^$L = $(1 << L)")
+    # Function barrier: `state` is declared as an abstract AbstractVector union on
+    # the trajectory types, so calling the kernel through a concretely typed
+    # argument is what keeps the inner loops from dispatching dynamically on every
+    # element (same reason _meas_fast_su2! asserts Vector{ComplexF64}).
+    return _total_witness(psi, L)
+end
+
+function _total_witness(psi::AbstractVector{T}, L::Int) where {T<:Number}
+    N = length(psi)
+
+    # bit = 1 is |↓⟩ (the convention of controlPsiZ!), so a basis state with
+    # `count_ones` down spins has magnetisation m = (L − 2·count_ones)/2.
+    jz2 = 0.0
+    @inbounds for s in 0:N-1
+        m = (L - 2 * count_ones(s)) / 2
+        jz2 += abs2(psi[s+1]) * m * m
+    end
+
+    # ‖Ĵ⁺ψ‖² and ‖Ĵ⁻ψ‖², with Ĵ⁺ = Σ_ℓ |↑⟩⟨↓|_ℓ clearing one set bit and Ĵ⁻
+    # setting one clear bit.
+    #
+    # The flipped bit is the OUTER loop and each pass walks contiguous
+    # half-blocks, so both the read and the two writes stream sequentially. A
+    # state-by-state scatter instead touches buf[s ⊻ (1<<b)] at stride 2^b, which
+    # misses cache on every high bit and is several times slower once 2^L leaves
+    # L3. Both buffers are filled in the same pass so psi is read once per bit.
+    up = zeros(T, N)
+    dn = zeros(T, N)
+    @inbounds for b in 0:L-1
+        mask = 1 << b
+        step = mask << 1
+        for base in 0:step:(N-1)
+            @simd for off in 0:mask-1
+                lo = base + off + 1        # bit b = 0, i.e. |↑⟩ at site b+1
+                hi = lo + mask             # bit b = 1, i.e. |↓⟩
+                up[lo] += psi[hi]
+                dn[hi] += psi[lo]
+            end
+        end
+    end
+
+    J2 = jz2 + 0.5 * (sum(abs2, up) + sum(abs2, dn))
+    Jmax = L / 2
+    return 0.5 * (Jmax * (Jmax + 1) - J2)
+end
+
+function total_witness(traj::SpinOneTrajectory)
+    error("The :W witness is defined for spin-1/2 models only; Eq. (56) relates it to " *
+          "the collective spin-1/2 algebra, which has no counterpart for model " *
+          "\"$(traj.circuit.model)\".")
+end
+
+"""
+    singlet_expectation(psi, L, i, j) -> Float64
+
+`⟨ψ|P̂_ij|ψ⟩` for the two-site singlet projector `P̂_ij = ¼(1 − σ⃗_i·σ⃗_j)`,
+computed directly from the amplitudes and without materialising any operator.
+
+With `|s⟩ = (|↑↓⟩ − |↓↑⟩)/√2` the projector weight is
+
+    ⟨P̂_ij⟩ = ½ Σ_rest |a_{↑↓} − a_{↓↑}|²,
+
+summed over the 2^(L−2) configurations of the other sites. This is the same
+quantity, and the same loop, as the first pass of `_meas_fast_su2_core!`.
+O(2^L) per pair with two sequential read streams, against a sparse 2^L×2^L
+matvec (or, worse, building the operator first).
+"""
+function singlet_expectation(psi::AbstractVector, L::Int, i::Int, j::Int)
+    i, j = minmax(i, j)
+    (1 <= i < j <= L) || error("singlet_expectation: need 1 ≤ i < j ≤ $L, got ($i, $j)")
+    length(psi) == 1 << L || error(
+        "singlet_expectation: state has length $(length(psi)), expected 2^$L")
+    # Function barrier — `state` is an abstract field type on the trajectories.
+    return _singlet_expectation(psi, L, i, j)
+end
+
+function _singlet_expectation(psi::AbstractVector{T}, L::Int, i::Int, j::Int) where {T<:Number}
+    N = length(psi)
+    mask_i = UInt64(1) << (L - i)      # site k occupies bit L−k (big-endian)
+    mask_j = UInt64(1) << (L - j)
+    both = mask_i | mask_j
+
+    p = 0.0
+    @inbounds for s in UInt64(0):UInt64(N - 1)
+        # visit each 4-state block once, from its (bit_i, bit_j) = (0,1) member
+        if (s & both) == mask_j
+            d = psi[Int(s) + 1] - psi[Int(s ⊻ both) + 1]
+            p += 0.5 * abs2(d)
+        end
+    end
+    return p
+end
+
+"""
+    nn_bonds(L, bc) -> Vector{Tuple{Int,Int}}
+
+Nearest-neighbour bonds in the order `get_proj_su2` stores them:
+`(1,2), …, (L−1,L)` and, under `:pbc`, the wraparound `(1,L)` last. Keeping this
+order means bond index ↔ measurement site agrees with `meas!`.
+"""
+function nn_bonds(L::Int, bc::Symbol)
+    bonds = [(site, site + 1) for site in 1:L-1]
+    bc == :pbc && push!(bonds, (1, L))
+    return bonds
+end
+
+# SU(2): the measured projector is the two-site singlet, so ⟨P̂⟩ is available in
+# closed form from the amplitudes and no stored operator is needed. Fredkin,
+# Motzkin and AKLT keep the generic sparse method below — their projectors are
+# three-site / spin-1 objects, not singlets.
+function total_projector(traj::Union{SU2Trajectory,SU2PBCTrajectory})
+    @unpack L, bc = traj.circuit
+    psi = traj.state
+
+    OP = 0.0
+    OPvar = 0.0
+    @inbounds for (i, j) in nn_bonds(L, bc)
+        dotprod = singlet_expectation(psi, L, i, j)
+        OP += dotprod
+        OPvar += dotprod^2
+    end
+
+    L_bound = bc == :pbc ? L : L - 1
+
+    OP = OP / L_bound
+    OPvar = OPvar / L_bound - OP^2
+    OP2 = OP^2
+
+    return OP, OPvar, OP2
+end
+
 function total_projector(traj::Trajectory)
     @unpack L,bc = traj.circuit
+
+    ismissing(traj.projectors) && error(
+        "total_projector: this trajectory type still needs stored projectors, but " *
+        "traj.projectors is missing. See needs_projectors(circuit) in initialize.jl.")
 
     OP = 0.0
     OPvar = 0.0
@@ -51,7 +216,7 @@ function total_projector(traj::Trajectory)
         OP += dotprod
         OPvar += dotprod^2
     end
-    
+
     L_bound = bc == :pbc ? L : L - 1
 
     OP = OP / L_bound
@@ -290,10 +455,7 @@ function projector_stats_r(traj::SpinHalfTrajectory, r::Int)
             # exactly L/2 unique pairs (i, i+L/2)
             @inbounds for i in 1:div(L,2)
                 j = i + r
-                exx = pauli2_expectation(psi, L, i, j, :X)
-                eyy = pauli2_expectation(psi, L, i, j, :Y)
-                ezz = pauli2_expectation(psi, L, i, j, :Z)
-                p = 0.25 * (1 - exx - eyy - ezz)
+                p = singlet_expectation(psi, L, i, j)
                 sumP += p
                 sumP2 += p^2
             end
@@ -306,10 +468,7 @@ function projector_stats_r(traj::SpinHalfTrajectory, r::Int)
                     j -= L
                 end
                 # no duplicates for r != L/2
-                exx = pauli2_expectation(psi, L, i, j, :X)
-                eyy = pauli2_expectation(psi, L, i, j, :Y)
-                ezz = pauli2_expectation(psi, L, i, j, :Z)
-                p = 0.25 * (1 - exx - eyy - ezz)
+                p = singlet_expectation(psi, L, i, j)
                 sumP += p
                 sumP2 += p^2
             end
@@ -320,10 +479,7 @@ function projector_stats_r(traj::SpinHalfTrajectory, r::Int)
         last_i = L - r
         @inbounds for i in 1:last_i
             j = i + r
-            exx = pauli2_expectation(psi, L, i, j, :X)
-            eyy = pauli2_expectation(psi, L, i, j, :Y)
-            ezz = pauli2_expectation(psi, L, i, j, :Z)
-            p = 0.25 * (1 - exx - eyy - ezz)
+            p = singlet_expectation(psi, L, i, j)
             sumP += p
             sumP2 += p^2
         end

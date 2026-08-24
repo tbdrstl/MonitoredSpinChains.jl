@@ -3,6 +3,7 @@ export rand_spinhalf_im,
     rand_spinhalf_real,
     rand_spinone_real,
     neelState,
+    dickeState,
     anomalous_ground_state,
     flat_spin1,
     generalized_dicke,
@@ -206,6 +207,35 @@ end
 
 f_stat_ent(L) = entanglement_entropy_general(fredkin_stationary_state(L), 1:div(L,2))
 
+"""
+    dickeState(L) -> Vector{ComplexF64}
+
+The m = 0 Dicke state |D_0⟩: the equal-amplitude superposition of all bitstrings
+with exactly L/2 up spins, normalised by 1/√C(L, L/2).
+
+This is the target of the SU(2) frustration-free protocol — the unique state with
+J = J_max = L/2 in the J^z = 0 sector, and the common kernel of every singlet
+projector P̂_{ℓ,ℓ+1}. Starting a run here means starting exactly on the dark
+manifold, so W = 0 and the protocol is stationary until noise or a kick moves it.
+
+Built directly in O(2^L) rather than through `generalized_dicke`, which
+constructs all L+1 magnetisation sectors by enumerating multiset permutations —
+far too slow to call once per trajectory.
+"""
+function dickeState(L::Int)::Vector{ComplexF64}
+    iseven(L) || error("dickeState: |D_0⟩ requires even L, got L = $L")
+    N = 1 << L
+    psi = zeros(ComplexF64, N)
+    nup = L ÷ 2
+    amp = 1 / sqrt(binomial(L, nup))
+    # bit = 0 is |↑⟩ (the convention of controlPsiZ!), so m = 0 means exactly
+    # L/2 set bits.
+    @inbounds for s in 0:N-1
+        count_ones(s) == nup && (psi[s+1] = amp)
+    end
+    return psi
+end
+
 # Registry mapping short names to initial-state constructors. Placed after
 # definitions to avoid forward-reference issues during module initialization.
 const INITIAL_STATE_REGISTRY = Dict(
@@ -215,6 +245,7 @@ const INITIAL_STATE_REGISTRY = Dict(
     "rand_spinone_real"          => rand_spinone_real,
     "neelState"                  => neelState,
     "neelState1"                 => neelState1,
+    "dickeState"                 => dickeState,
     "flat_spin1"                 => flat_spin1,
     "fredkin_stationary_state"   => fredkin_stationary_state,
 )

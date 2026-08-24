@@ -191,9 +191,24 @@ function create_simulation(params::Dict; testmode::Bool=false)
     end
 
     # normalize/prepare optional parameters
+    # Each entry may be a bare rate κ (isotropic, expanded to (κ/3,κ/3,κ/3)), an
+    # explicit (κ_x, κ_y, κ_z) triple, or a function of L returning either.
     noise_list = get(params, "noise", [L -> 0.0])
+    noise_list = [n isa Function ? (L -> normalize_noise(n(L))) : (_ -> normalize_noise(n))
+                  for n in noise_list]
 
-    noise_list = [n isa Function ? n : (_ -> n) for n in noise_list]
+    kick_list = get(params, "kick", [:none])
+    for kick in kick_list
+        if !(kick in legal_kicks)
+            throw(ArgumentError("Kick $kick is not a legal kick. Legal: $(legal_kicks)"))
+        end
+    end
+
+    # kick_step: 0 fires the kick at the end of thermalization; n > 0 defers it
+    # to just after the row recorded at raw time step n. Accepts an Int or a
+    # function of L (e.g. `L -> meas_every(L)` to kick one recorded step in).
+    kick_step_list = get(params, "kick_step", [0])
+    kick_step_list = [k isa Function ? k : (_ -> k) for k in kick_step_list]
     meas_steps_list = map(normalize_step_function, params["meas_steps"])
     thermalization_list = map(normalize_step_function, params["thermalizationSteps"])
     meas_every_list = map(normalize_step_function, params["meas_every"])
@@ -217,10 +232,29 @@ function create_simulation(params::Dict; testmode::Bool=false)
         (_,trajectories_averaged) in enumerate(params["trajectories_averaged"]),
         (_,thermalizationSteps) in enumerate(thermalization_list),
         (_,meas_every) in enumerate(meas_every_list),
-        (_,model) in enumerate(params["model"])
+        (_,model) in enumerate(params["model"]),
+        (_,kick) in enumerate(kick_list)
 
 
         normalized_initial = normalize_initial_state(initialState)
+
+        kick_step = kick_step_f(systemSize)
+        total_steps = meas_steps(systemSize) * meas_every(systemSize)
+        if kick_step < 0 || kick_step > total_steps
+            throw(ArgumentError(
+                "kick_step = $kick_step is outside the recorded window 0:$total_steps " *
+                "for L = $systemSize; the kick would never fire."))
+        end
+        # `save_trajectory` checkpoints whenever current_timestep % 30 == 0 (for
+        # L > 12), and a resumed run restarts the loop at the saved timestep. If
+        # kick_step landed on such a checkpoint the kick would fire a second time
+        # on resume, so that one alignment is rejected outright.
+        if kick_step > 0 && systemSize > 12 && kick_step % 30 == 0
+            throw(ArgumentError(
+                "kick_step = $kick_step coincides with a save checkpoint (multiples of " *
+                "30 for L > 12); a resumed trajectory would apply the kick twice. " *
+                "Shift it by one step."))
+        end
 
         push!(vector_of_circuits, Circuit(
             systemSize,
@@ -238,7 +272,8 @@ function create_simulation(params::Dict; testmode::Bool=false)
             trajectories_averaged,
             thermalizationSteps(systemSize),
             meas_every(systemSize),
-            model
+            model,
+            kick
         ))
     end
 
@@ -355,6 +390,31 @@ function check_if_circuit_is_already_computed!(vector_of_circuits::Vector{Circui
     return 
 end
 
+"""
+    needs_projectors(circuit) -> Bool
+
+Whether this circuit still requires the stored `Vector{SparseMatrixCSC}` of
+projectors, which costs ≈ 32·L·2^L bytes (12 GB at L = 24) and is by far the
+largest allocation in a run.
+
+Two consumers remain:
+
+  * `random_unitary!` takes the projector vector as an argument, so any circuit
+    with `unitaryRate > 0` needs them.
+  * the generic sparse `meas!`, used by every trajectory type except
+    `SU2PBCTrajectory` — the periodic SU(2) chain is the one case with a
+    projector-free measurement kernel (`_meas_fast_su2_core!`).
+
+Observables no longer need them at all: `:OP`, `:OPH` and `:OPQ` go through
+`singlet_expectation` on SU(2), and `:W`/`:EE` never did. The generic
+`total_projector` fallback (Fredkin/Motzkin/AKLT) still reads them, but those
+trajectory types are exactly the ones this predicate keeps `true`.
+"""
+function needs_projectors(circuit::Circuit)::Bool
+    circuit.unitaryRate > 0 && return true
+    return determine_trajectory(circuit) !== SU2PBCTrajectory
+end
+
 function compute_missing_parameters!(traj::SpinOneTrajectory)
     if ismissing(traj.projectors)
         traj.projectors = get_projectors(traj.circuit)
@@ -368,7 +428,7 @@ function compute_missing_parameters!(traj::SpinOneTrajectory)
 end
 
 function compute_missing_parameters!(traj::SpinHalfTrajectory)
-    if ismissing(traj.projectors)
+    if ismissing(traj.projectors) && needs_projectors(traj.circuit)
         traj.projectors = get_projectors(traj.circuit)
     end
 
@@ -376,7 +436,15 @@ function compute_missing_parameters!(traj::SpinHalfTrajectory)
         traj.state = traj.circuit.initialState(traj.circuit.L)
     end
 
-    if traj.circuit.unitaryRate > 0 && !(traj.state isa Vector{ComplexF64})
+    # σ^y and the Haar unitaries need a complex, dense state vector. Real-valued
+    # initial states (rand_spinhalf_real, generalized_dicke) are promoted here.
+    # σ^x and σ^z would survive in a real vector, but promoting on any nonzero
+    # noise or kick keeps the state type independent of which axes happen to be
+    # drawn at runtime.
+    needs_complex = traj.circuit.unitaryRate > 0 ||
+                    !all(iszero, traj.circuit.noise) ||
+                    traj.circuit.kick != :none
+    if needs_complex && !(traj.state isa Vector{ComplexF64})
         traj.state = convert(Vector{ComplexF64}, traj.state)
     end
 

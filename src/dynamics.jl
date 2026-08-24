@@ -13,6 +13,13 @@ function time_evolve!(traj::Trajectory)
     for timestep in traj.current_timestep:traj.circuit.meas_steps*traj.circuit.meas_every
         time_step!(traj)
         get_observables!(traj)
+        # Deferred kick. Fired *after* get_observables!, so the row recorded at
+        # kick_step is the last pre-kick sample — set kick_step = meas_every to
+        # keep row 1 as the undisturbed (thermalised) baseline and have every
+        # later row show the recovery.
+        if traj.circuit.kick_step == traj.current_timestep
+            apply_kick!(traj)
+        end
         traj.current_timestep += 1
         save_trajectory(traj)
         # GC.gc()
@@ -27,8 +34,17 @@ function thermalize!(traj::Trajectory)
     for timestep in traj.current_timestep:traj.circuit.thermalizationSteps
         time_step!(traj)
         traj.current_timestep += 1
-    end    
+    end
     traj.current_timestep = 1
+
+    # One-shot disturbance. With kick_step == 0 it lands here, right after
+    # thermalization has reached the protocol's stationary state and before the
+    # recorded window opens, so every recorded row is post-kick. Guarded by the
+    # early return above: `load_existing_trajectory_data!` force-sets
+    # `thermalized = true` when it resumes a saved trajectory, so a resumed run
+    # never kicks twice. With thermalizationSteps == 0 the loop is empty but the
+    # kick still fires. A positive kick_step defers it to `time_evolve!`.
+    traj.circuit.kick_step == 0 && apply_kick!(traj)
 
     traj.thermalized = true
     return traj
@@ -44,6 +60,11 @@ end
 function time_step!(circuit::Circuit, traj::Trajectory, unitaryTimeEvolProb::Float64, unitarySteps::Int64) :: Trajectory
     @unpack L, measurement = circuit
 
+    # Pauli noise. One time step is one measurement event, i.e. dt = 1/L in the
+    # units where every bond is measured at rate γ_M = 1, so this must run once
+    # per step regardless of whether measurement is enabled.
+    apply_pauli_noise!(traj)
+
     # unitary gates
     for __ in 1:unitarySteps
         if rand() < unitaryTimeEvolProb
@@ -56,6 +77,19 @@ function time_step!(circuit::Circuit, traj::Trajectory, unitaryTimeEvolProb::Flo
     return traj
 end
 
+"""
+    do_feedback(circuit, site) -> Bool
+
+Whether a positive (singlet) detection on the bond measured at `site` triggers
+the feedback unitary. `:Z` is the draft's protocol — feedback on every measured
+bond (Eq. 21-22) — and `:Z_bond1` restricts it to bond 1, which is what `:Z`
+meant in earlier versions of this package.
+"""
+@inline function do_feedback(circuit::Circuit, site::Int)::Bool
+    fb = circuit.feedback
+    return fb == :Z || (fb == :Z_bond1 && site == 1)
+end
+
 function meas!(traj::Trajectory, site::Int)
     Ppsi = traj.projectors[site] * traj.state
     prob = real(dot(traj.state, Ppsi))
@@ -63,29 +97,31 @@ function meas!(traj::Trajectory, site::Int)
         sqrtProb = sqrt(prob)
         traj.state .= Ppsi/sqrtProb
 
-        # false not correction if measurement outcome is singlet
-        if (rand() < (1.0+exp(-traj.circuit.noise))/2.) && (site == 1)
+        # Positive outcome: the feedback unitary K̂_α1 = V̂_α P̂_α acts (Eq. 4).
+        if do_feedback(traj.circuit, site)
             correct!(traj,site)
         end
     else
+        # Null outcome: K̂_α0 = 1 − P̂_α, no feedback.
         traj.state .= (traj.state - Ppsi)/sqrt(1.0-prob)
-        # false correction if measurement outcome is triplet
-        if rand() < (1.0-exp(-traj.circuit.noise))/2.
-            correct!(traj,site)
-        end 
     end
 
-    return 
+    return
 end
 
-# Specialized fast SU2 measurement dispatch (replaces meas_fast! wrapper)
-# function meas!(traj::SU2Trajectory, site::Int)
-#     _meas_fast_su2!(traj, site)
-# end
-
-# function meas!(traj::SU2PBCTrajectory, site::Int)
-#     _meas_fast_su2!(traj, site)
-# end
+# Specialized fast SU2 measurement dispatch.
+#
+# Enabled for the periodic chain only. `_meas_fast_su2_core!` reproduces the
+# sparse-projector `meas!` to machine precision (verified: ‖ψ_sparse − ψ_fast‖ ~
+# 4e-16 over a 200-measurement trajectory with a shared seed) while avoiding the
+# two 2^L allocations that `meas!` makes per measurement.
+#
+# NOT enabled for SU2Trajectory (:obc). The two paths genuinely differ there:
+# `get_proj_su2(L; pbc=false)` returns L-1 projectors while `time_step!` draws
+# `rand(1:L)`, so the sparse path raises a BoundsError at site L whereas the fast
+# path returns without measuring. Switching :obc over would silently change that
+# behaviour, so it is deliberately left on the sparse path.
+meas!(traj::SU2PBCTrajectory, site::Int) = _meas_fast_su2!(traj, site)
 
 # Internal fast SU2 measurement (nearest-neighbour singlet projector)
 function _meas_fast_su2!(traj::SpinHalfTrajectory, site::Int)
@@ -107,11 +143,20 @@ function _meas_fast_su2!(traj::SpinHalfTrajectory, site::Int)
 
     # Function barrier with concrete state type assumption for performance
     psi = traj.state::Vector{ComplexF64}
-    _meas_fast_su2_core!(psi, L, i, j)
+    singlet = _meas_fast_su2_core!(psi, L, i, j)
+
+    # Positive outcome: the feedback unitary K̂_α1 = V̂_α P̂_α acts (Eq. 4). σ^z is
+    # applied to `site`, the bond's left endpoint — the same endpoint the sparse
+    # `meas!` uses, and immaterial by Eq. (22). No feedback on the null outcome.
+    if singlet && do_feedback(traj.circuit, site)
+        correct!(traj, site)
+    end
     return traj
 end
 
-# Core, allocation-free kernel acting in-place on psi for a single nearest-neighbour bond (i,j)
+# Core, allocation-free kernel acting in-place on psi for a single nearest-neighbour
+# bond (i,j). Returns `true` if the singlet outcome was drawn, so the caller can
+# apply the conditional feedback unitary.
 @inline function _meas_fast_su2_core!(psi::Vector{ComplexF64}, L::Int, i::Int, j::Int)
     N = length(psi)
     bit_i = L - i
@@ -183,7 +228,7 @@ end
             end
         end
     end
-    return nothing
+    return singlet
 end
 
 function correct!(traj::SU2Trajectory, site::Int)
@@ -274,21 +319,188 @@ function controlPsiZ!(state::AbstractVector{T}, L::Int, site::Int) where {T<:Uni
     end
 end
 
+# --- Single-site Pauli gates -------------------------------------------------
+#
+# Bit convention follows controlPsiZ! above: site `s` occupies bit position
+# `L - s` of the basis index (big-endian — site 1 is the most significant bit),
+# with bit = 0 meaning |↑⟩ and bit = 1 meaning |↓⟩, so Z = diag(+1, −1).
+#
+# Note `constants.jl` defines `Y = [0 im; -im 0]`, i.e. −σ^y. That sign is
+# immaterial for everything here: both a Pauli channel σρσ† and a kick are
+# invariant under σ → −σ. These kernels use the standard σ^y = [0 -im; im 0].
+#
+# Each loop visits every bit-pair once, entered from its bit = 0 member (`j != i`
+# holds exactly when bit `L - site` of `i` is clear), so the updates are
+# alias-free without a scratch buffer.
+
+"""
+    applyX!(state, L, site)
+
+Apply σ^x on `site` in place: a pure permutation of amplitudes.
+"""
+function applyX!(state::AbstractVector, L::Int, site::Int)
+    N = length(state)
+    mask = 1 << (L - site)
+    @inbounds for i in 0:N-1
+        j = i | mask
+        if j != i
+            state[i+1], state[j+1] = state[j+1], state[i+1]
+        end
+    end
+    return state
+end
+
+"""
+    applyY!(state, L, site)
+
+Apply σ^y on `site` in place, using σ^y|↑⟩ = +i|↓⟩ and σ^y|↓⟩ = −i|↑⟩.
+Requires a complex state vector.
+"""
+function applyY!(state::AbstractVector{<:Complex}, L::Int, site::Int)
+    N = length(state)
+    mask = 1 << (L - site)
+    @inbounds for i in 0:N-1
+        j = i | mask
+        if j != i
+            a0 = state[i+1]          # amplitude with bit = 0, i.e. |↑⟩
+            a1 = state[j+1]          # amplitude with bit = 1, i.e. |↓⟩
+            state[j+1] = im * a0
+            state[i+1] = -im * a1
+        end
+    end
+    return state
+end
+
+function applyY!(state::AbstractVector, L::Int, site::Int)
+    error("applyY!: σ^y needs a complex state vector, got eltype $(eltype(state)). " *
+          "compute_missing_parameters! promotes the state to Vector{ComplexF64} when " *
+          "κ_y > 0 or a kick is set; this error means that promotion was bypassed.")
+end
+
+"""
+    applyZ!(state, L, site)
+
+Apply σ^z on `site` in place.
+"""
+applyZ!(state::AbstractVector, L::Int, site::Int) = (controlPsiZ!(state, L, site); state)
+
+"""
+    apply_pauli!(state, L, site, axis)
+
+Apply σ^x (`axis = 1`), σ^y (`axis = 2`) or σ^z (`axis = 3`) on `site`, in place.
+"""
+function apply_pauli!(state::AbstractVector, L::Int, site::Int, axis::Int)
+    axis == 1 && return applyX!(state, L, site)
+    axis == 2 && return applyY!(state, L, site)
+    axis == 3 && return applyZ!(state, L, site)
+    error("apply_pauli!: axis must be 1 (x), 2 (y) or 3 (z), got $axis")
+end
+
+"""
+    rand_poisson(λ) -> Int
+
+Poisson deviate. Knuth's product method, which is exact and cheap at the small
+rates used for the noise process; the normal approximation above λ = 30 is a
+guard against a long loop and is never reached in practice.
+"""
+function rand_poisson(λ::Float64)::Int
+    λ <= 0 && return 0
+    if λ < 30.0
+        threshold = exp(-λ)
+        k = 0
+        p = 1.0
+        while true
+            p *= rand()
+            p <= threshold && return k
+            k += 1
+        end
+    end
+    return max(0, round(Int, λ + sqrt(λ) * randn()))
+end
+
+# Draw a Pauli axis with probability proportional to its rate.
+@inline function _draw_axis(κ::NTuple{3,Float64}, κtot::Float64)::Int
+    r = rand() * κtot
+    r < κ[1] && return 1
+    r < κ[1] + κ[2] && return 2
+    return 3
+end
+
+"""
+    apply_pauli_noise!(traj)
+
+Apply the random-Pauli noise events of one time step, in place.
+
+The channel is `𝓛 ρ = Σ_{i,a} κ_a (σ_i^a ρ σ_i^a − ρ)` with per-site rates
+`κ = (κ_x, κ_y, κ_z) = circuit.noise`; isotropic noise at total rate κ per site
+is `κ_a = κ/3`, which is Eq. (97) of the draft. Because every jump operator is
+unitary (σ^a†σ^a = 1) there is no no-jump decay to compensate, so sampling the
+jumps directly reproduces the channel exactly, with no trajectory reweighting.
+
+One time step is one measurement event. With every bond measured at rate
+γ_M = 1 on a ring of L bonds, that is dt = 1/L, and the expected number of noise
+events across all L sites in a step is `L · (κ_x+κ_y+κ_z) · (1/L)`, i.e. exactly
+`κ_x+κ_y+κ_z` — independent of L. The residual error from applying a whole step's
+events at one point in the step rather than at their true times is O(κ/L).
+"""
+function apply_pauli_noise!(traj::SpinHalfTrajectory)
+    κ = traj.circuit.noise
+    κtot = κ[1] + κ[2] + κ[3]
+    κtot <= 0 && return nothing
+
+    L = traj.circuit.L
+    for _ in 1:rand_poisson(κtot)
+        apply_pauli!(traj.state, L, rand(1:L), _draw_axis(κ, κtot))
+    end
+    return nothing
+end
+
+function apply_pauli_noise!(traj::SpinOneTrajectory)
+    all(iszero, traj.circuit.noise) || error(
+        "Pauli noise is defined for spin-1/2 models only; σ^a has no meaning on the " *
+        "3-dimensional local Hilbert space of model \"$(traj.circuit.model)\". " *
+        "Set \"noise\" => [0.0].")
+    return nothing
+end
+
+"""
+    apply_kick!(traj)
+
+Apply the one-shot disturbance of Sec. VI C, once, at the end of thermalization.
+
+`:randomPauli` draws a ∈ {x, y, z} uniformly and applies σ^a to site
+`KICK_SITE`. Averaged over trajectories this is exactly the single-site channel
+`Φ[ρ] = (1/3) Σ_a σ_i^a ρ σ_i^a` — the p = 1 Pauli twirl, with no identity
+branch, so an error is certain rather than merely likely. By Eq. (96) it sends
+`⟨P̂_ij⟩ → (1 − ⟨P̂_ij⟩)/3` on every pair containing `i` and leaves the rest
+untouched.
+"""
+function apply_kick!(traj::SpinHalfTrajectory)
+    kick = traj.circuit.kick
+    kick == :none && return nothing
+    if kick == :randomPauli
+        apply_pauli!(traj.state, traj.circuit.L, KICK_SITE, rand(1:3))
+        return nothing
+    end
+    error("apply_kick!: unknown kick $kick (legal: $(legal_kicks))")
+end
+
+function apply_kick!(traj::SpinOneTrajectory)
+    traj.circuit.kick == :none || error(
+        "The :randomPauli kick is defined for spin-1/2 models only; σ^a has no meaning " *
+        "on the 3-dimensional local Hilbert space of model \"$(traj.circuit.model)\".")
+    return nothing
+end
+
 # Fast Fredkin PBC measurement (3-qubit projector) for sites 1..L-2; falls back otherwise
 function meas_fast_fredkin!(traj::FredkinPBCTrajectory, site::Int)
     L = traj.circuit.L
     if 1 <= site <= L-2
         psi = traj.state::Vector{ComplexF64}
         p = _meas_fast_fredkin_core!(psi, L, site, site+1, site+2)
-        # noise logic analogous to meas!: treat success probability = p
-        if rand() < p
-            if rand() < (1 + exp(-traj.circuit.noise)) * 0.5
-                correct!(traj, site)
-            end
-        else
-            if rand() < (1 - exp(-traj.circuit.noise)) * 0.5
-                correct!(traj, site)
-            end
+        # feedback logic analogous to meas!: treat success probability = p
+        if rand() < p && do_feedback(traj.circuit, site)
+            correct!(traj, site)
         end
         return traj
     else

@@ -13,13 +13,6 @@ function time_evolve!(traj::Trajectory)
     for timestep in traj.current_timestep:traj.circuit.meas_steps*traj.circuit.meas_every
         time_step!(traj)
         get_observables!(traj)
-        # Deferred kick. Fired *after* get_observables!, so the row recorded at
-        # kick_step is the last pre-kick sample — set kick_step = meas_every to
-        # keep row 1 as the undisturbed (thermalised) baseline and have every
-        # later row show the recovery.
-        if traj.circuit.kick_step == traj.current_timestep
-            apply_kick!(traj)
-        end
         traj.current_timestep += 1
         save_trajectory(traj)
         # GC.gc()
@@ -37,14 +30,14 @@ function thermalize!(traj::Trajectory)
     end
     traj.current_timestep = 1
 
-    # One-shot disturbance. With kick_step == 0 it lands here, right after
-    # thermalization has reached the protocol's stationary state and before the
-    # recorded window opens, so every recorded row is post-kick. Guarded by the
+    # One-shot disturbance, applied right after thermalization has reached the
+    # protocol's stationary state and before the recorded window opens, so every
+    # recorded row is post-kick. Guarded by the
     # early return above: `load_existing_trajectory_data!` force-sets
     # `thermalized = true` when it resumes a saved trajectory, so a resumed run
     # never kicks twice. With thermalizationSteps == 0 the loop is empty but the
-    # kick still fires. A positive kick_step defers it to `time_evolve!`.
-    traj.circuit.kick_step == 0 && apply_kick!(traj)
+    # kick still fires.
+    apply_kick!(traj)
 
     traj.thermalized = true
     return traj

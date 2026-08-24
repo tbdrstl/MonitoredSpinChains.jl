@@ -54,22 +54,11 @@ end
 function Circuit(L, meas_steps, average, unitaryRate, unitarySetup, bc,
                  initialState, measurement, feedback, noise::Real, result_folder,
                  observables, trajectories_averaged, thermalizationSteps,
-                 meas_every, model, kick, kick_step=0)
+                 meas_every, model, kick)
     return Circuit(L, meas_steps, average, unitaryRate, unitarySetup, bc,
                    initialState, measurement, feedback, normalize_noise(noise),
                    result_folder, observables, trajectories_averaged,
-                   thermalizationSteps, meas_every, model, kick, kick_step)
-end
-
-# 17-argument form with an explicit noise triple but no kick_step.
-function Circuit(L, meas_steps, average, unitaryRate, unitarySetup, bc,
-                 initialState, measurement, feedback, noise::NTuple{3,Real},
-                 result_folder, observables, trajectories_averaged,
-                 thermalizationSteps, meas_every, model, kick)
-    return Circuit(L, meas_steps, average, unitaryRate, unitarySetup, bc,
-                   initialState, measurement, feedback, normalize_noise(noise),
-                   result_folder, observables, trajectories_averaged,
-                   thermalizationSteps, meas_every, model, kick, 0)
+                   thermalizationSteps, meas_every, model, kick)
 end
 
 """

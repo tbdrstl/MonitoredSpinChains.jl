@@ -380,57 +380,6 @@ end
     @test MonitoredSpinChains.needs_projectors(fredkin)
 end
 
-@testset "deferred kick (kick_step)" begin
-    L = 8
-    D0 = Vector{ComplexF64}(generalized_dicke(L, 2)[div(L, 2) + 1])
-    # No measurement and no noise: the state only ever changes when the kick
-    # fires, so the recorded series pins the firing time exactly.
-    for (kick_step, first_kicked_row) in ((0, 1), (1, 2), (3, 4))
-        circ = Circuit(L, 6, 1, 0.0, :noProj, :pbc, _ -> copy(D0), false, :Z,
-                       (0.0, 0.0, 0.0), mktempdir(), [:W], true, 0, 1, "su2",
-                       :randomPauli, kick_step)
-        traj = SU2PBCTrajectory(trajectoryID=1, circuit=circ, current_timestep=1,
-                                thermalized=false)
-        traj.observables = MonitoredSpinChains.get_observables(circ)
-        compute_missing_parameters!(traj)
-        MonitoredSpinChains.time_evolve!(traj)
-
-        w = traj.observables.witness
-        # rows before the kick see the untouched dark state, rows after see the
-        # kicked one (W = L/2 or (L-2)/4, never 0)
-        for k in 1:first_kicked_row-1
-            @test w[k] ≈ 0 atol = 1e-12
-        end
-        for k in first_kicked_row:length(w)
-            @test w[k] > 0.1
-        end
-        @test w[first_kicked_row] ≈ w[end]        # frozen after the kick
-    end
-end
-
-@testset "kick_step validation" begin
-    base = Dict(
-        "name" => "kickstep", "systemSize" => [16], "meas_steps" => [10],
-        "average" => [1], "bc" => [:pbc],
-        "initialState" => [MonitoredSpinChains.neelState], "measurement" => [true],
-        "feedback" => [:Z], "result_folder" => mktempdir(), "observables" => [:W],
-        "trajectories_averaged" => [true], "thermalizationSteps" => [0],
-        "meas_every" => [1], "model" => ["su2"], "kick" => [:randomPauli])
-
-    ok = create_simulation(merge(base, Dict("kick_step" => [4])); testmode=true)
-    @test ok.params[1].kick_step == 4
-    @test hash(ok.params[1]) != hash(create_simulation(base; testmode=true).params[1])
-
-    # beyond the recorded window: would never fire
-    @test_throws ArgumentError create_simulation(merge(base, Dict("kick_step" => [11]));
-                                                 testmode=true)
-    @test_throws ArgumentError create_simulation(merge(base, Dict("kick_step" => [-1]));
-                                                 testmode=true)
-    # collides with a save checkpoint at L > 12 -> would double-kick on resume
-    big = merge(base, Dict("meas_steps" => [100], "kick_step" => [30]))
-    @test_throws ArgumentError create_simulation(big; testmode=true)
-end
-
 @testset "dickeState" begin
     for L in (4, 6, 8, 10)
         psi = MonitoredSpinChains.dickeState(L)

@@ -204,11 +204,6 @@ function create_simulation(params::Dict; testmode::Bool=false)
         end
     end
 
-    # kick_step: 0 fires the kick at the end of thermalization; n > 0 defers it
-    # to just after the row recorded at raw time step n. Accepts an Int or a
-    # function of L (e.g. `L -> meas_every(L)` to kick one recorded step in).
-    kick_step_list = get(params, "kick_step", [0])
-    kick_step_list = [k isa Function ? k : (_ -> k) for k in kick_step_list]
     meas_steps_list = map(normalize_step_function, params["meas_steps"])
     thermalization_list = map(normalize_step_function, params["thermalizationSteps"])
     meas_every_list = map(normalize_step_function, params["meas_every"])
@@ -237,24 +232,6 @@ function create_simulation(params::Dict; testmode::Bool=false)
 
 
         normalized_initial = normalize_initial_state(initialState)
-
-        kick_step = kick_step_f(systemSize)
-        total_steps = meas_steps(systemSize) * meas_every(systemSize)
-        if kick_step < 0 || kick_step > total_steps
-            throw(ArgumentError(
-                "kick_step = $kick_step is outside the recorded window 0:$total_steps " *
-                "for L = $systemSize; the kick would never fire."))
-        end
-        # `save_trajectory` checkpoints whenever current_timestep % 30 == 0 (for
-        # L > 12), and a resumed run restarts the loop at the saved timestep. If
-        # kick_step landed on such a checkpoint the kick would fire a second time
-        # on resume, so that one alignment is rejected outright.
-        if kick_step > 0 && systemSize > 12 && kick_step % 30 == 0
-            throw(ArgumentError(
-                "kick_step = $kick_step coincides with a save checkpoint (multiples of " *
-                "30 for L > 12); a resumed trajectory would apply the kick twice. " *
-                "Shift it by one step."))
-        end
 
         push!(vector_of_circuits, Circuit(
             systemSize,

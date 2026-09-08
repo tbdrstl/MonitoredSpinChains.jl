@@ -273,7 +273,11 @@ function get_trajectories_from_circuit(circuit::Circuit; state::Bool=false, proj
     trajectories = Vector{Trajectory}(undef, 0)
     observables = get_observables(circuit)
     current_timestep = 1
-    thermalized = ifelse(circuit.thermalizationSteps == 0, true, false)
+    # Always false, even for thermalizationSteps == 0: `thermalize!` is where the
+    # one-shot kick fires and where `time_evolve!` learns that the recorded window
+    # is opening for the first time (row 1). Its step loop is empty at 0 steps, so
+    # entering it costs nothing, while skipping it silently dropped both.
+    thermalized = false
     
     for trajectoryID in 1:circuit.average
         traj_type = determine_trajectory(circuit)

@@ -87,7 +87,7 @@ end
     psi_before = copy(traj.state)
     traj.observables = get_observables(circuit)
     traj.current_timestep = 1
-    get_observables!(traj)
+    get_observables!(traj, 0)          # 0 steps done = the window start, row 1
     psi_after = traj.state
     @test norm(psi_after - psi_before) < 1e-12
 end
@@ -115,7 +115,7 @@ end
     traj = first(get_trajectories_from_circuit(circuit; state=true, projectors=true))
     traj.observables = get_observables(circuit)
     traj.current_timestep = 1
-    get_observables!(traj)
+    get_observables!(traj, 0)          # 0 steps done = the window start, row 1
 
     psi = traj.state
 

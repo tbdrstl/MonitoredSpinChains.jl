@@ -204,7 +204,8 @@ end
     sim = create_simulation(params; testmode=true)
     circ = sim.params[1]
     obs = MonitoredSpinChains.get_observables(circ)
-    @test obs.witness == zeros(3)
+    # meas_steps + 1: row 1 is the window start, rows 2..4 the recorded steps
+    @test obs.witness == zeros(circ.meas_steps + 1)
 
     traj = SU2PBCTrajectory(trajectoryID=1, circuit=circ, current_timestep=1,
                             thermalized=false)
@@ -215,6 +216,92 @@ end
     @test all(>=(0), traj.observables.witness)     # Ŵ ⪰ 0, it is a sum of projectors
     # Néel is far from the symmetric manifold; W must be strictly positive there.
     @test traj.observables.witness[1] > 0
+end
+
+# Row 1 of every step-indexed observable is the window start: the state right
+# after thermalization and the one-shot kick, before any time step. From |D_0⟩
+# with thermalizationSteps = 0 and no noise that row is exactly known — 0 without
+# a kick (|D_0⟩ is dark), and L/2 (σ^z) or (L-2)/4 (σ^x, σ^y) with one, which is
+# W(t_0⁺) and unrecoverable from any later row.
+@testset "row 1 is the window start" begin
+    Random.seed!(20240614)
+    L = 6
+    meas_steps = 3
+    for kick in (:none, :randomPauli)
+        circ = Circuit(L, meas_steps, 1, 0.0, :noProj, :pbc,
+                       MonitoredSpinChains.dickeState, true, :Z, 0.0,
+                       mktempdir(), [:W], true, 0, 1, "su2", kick)
+        obs = MonitoredSpinChains.get_observables(circ)
+        @test length(obs.witness) == meas_steps + 1
+
+        # the production path must leave the kick to thermalize!, also at 0 steps
+        traj = first(get_trajectories_from_circuit(circ; state=true))
+        @test !traj.thermalized
+        traj.observables = obs
+        compute_missing_parameters!(traj)
+        MonitoredSpinChains.time_evolve!(traj)
+
+        W = traj.observables.witness
+        @test length(W) == meas_steps + 1
+        if kick == :none
+            @test W[1] ≈ 0 atol = 1e-12
+        else
+            @test W[1] ≈ L / 2 || W[1] ≈ (L - 2) / 4
+        end
+
+        # Resume safety: a resumed trajectory carries thermalized = true and the
+        # observables it already wrote, so time_evolve! must neither kick again
+        # nor rewrite row 1.
+        resumed = SU2PBCTrajectory(trajectoryID=traj.trajectoryID, circuit=circ,
+                                   current_timestep=traj.current_timestep,
+                                   thermalized=true, state=copy(traj.state),
+                                   observables=deepcopy(traj.observables))
+        MonitoredSpinChains.check_observable_length(resumed)
+        MonitoredSpinChains.time_evolve!(resumed)
+        @test resumed.observables.witness == W
+
+        # Pre-v3.1 output has meas_steps rows and must be refused, not mixed in.
+        resumed.observables.witness = zeros(meas_steps)
+        @test_throws ErrorException MonitoredSpinChains.check_observable_length(resumed)
+    end
+end
+
+@testset "resume restores a saved trajectory" begin
+    # load_existing_trajectory_data! used to delete every file it was handed:
+    # `f` was the target of the `try` assignment and so undefined inside it, the
+    # first lookup threw, and the catch removed the data. Nothing covered that
+    # path, so it stayed dead. These are the two behaviours it must have.
+    Random.seed!(20240615)
+    L = 6
+    meas_steps = 3
+    folder = mktempdir()
+    circ = Circuit(L, meas_steps, 1, 0.0, :noProj, :pbc,
+                   MonitoredSpinChains.dickeState, true, :Z, 0.0,
+                   folder, [:W], true, 0, 1, "su2", :randomPauli)
+
+    traj = first(get_trajectories_from_circuit(circ; state=true))
+    compute_missing_parameters!(traj)
+    MonitoredSpinChains.time_evolve!(traj)
+    MonitoredSpinChains.save_traj(traj)
+    file = MonitoredSpinChains.trajectory_to_filename(traj)
+    @test isfile(file)
+
+    # A readable file is restored, not deleted: same witness, same step count,
+    # and thermalized = true so the kick and row 1 are not repeated.
+    fresh = first(get_trajectories_from_circuit(circ; state=true))
+    MonitoredSpinChains.load_existing_trajectory_data!(fresh)
+    @test isfile(file)
+    @test fresh.thermalized
+    @test fresh.current_timestep == traj.current_timestep
+    @test fresh.observables.witness == traj.observables.witness
+    @test fresh.state == traj.state
+
+    # An unreadable file is still removed, so the run continues by recomputing.
+    write(file, "not a jld2 file")
+    broken = first(get_trajectories_from_circuit(circ; state=true))
+    MonitoredSpinChains.load_existing_trajectory_data!(broken)
+    @test !isfile(file)
+    @test !broken.thermalized
 end
 
 # meas! on SU2PBCTrajectory now dispatches to the allocation-free kernel. It must

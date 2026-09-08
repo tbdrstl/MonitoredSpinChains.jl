@@ -19,9 +19,9 @@ function move_to_computed_folder(traj::Trajectory)
     if isfile(file)
         # move file to already_computed folder
         new_file = joinpath(traj.circuit.result_folder, "already_computed", basename(file))
-        if !isdir(joinpath(traj.circuit.result_folder, "already_computed"))
-            mkdir(joinpath(traj.circuit.result_folder, "already_computed"))
-        end
+        # mkpath, not mkdir: many MPI ranks race here and mkdir throws EEXIST,
+        # killing the rank after its trajectory finished but before the move.
+        mkpath(joinpath(traj.circuit.result_folder, "already_computed"))
         mv(file, new_file)
     end
 end
@@ -54,19 +54,34 @@ function load_existing_trajectory_data!(traj::Trajectory)
     file = trajectory_to_filename(traj)
 
     if isfile(file)
-        # remove file to ensure simulation continues (compute trajectory again)
-        f = try 
+        # The load is its own statement, and only the load is guarded. Written as
+        # `f = try load(file); traj.trajectoryID = f["trajectoryID"] ... end`, `f`
+        # was the target of the assignment and so still undefined inside the try
+        # body: the first lookup threw UndefVarError, the catch removed the saved
+        # file, and every trajectory was recomputed from scratch. Resume only
+        # works with the two separated.
+        #
+        # A file that genuinely cannot be read is still removed, so the
+        # simulation continues by recomputing that trajectory -- but a failure in
+        # the reads below now surfaces instead of silently deleting the data.
+        f = try
             load(file)
-            traj.trajectoryID = f["trajectoryID"]
-            traj.state = f["state"]
-            traj.observables = f["observables"]
-            traj.current_timestep = f["current_timestep"]
-            # if file has been saved, state is already thermalized. Important to be able to continue computation from loaded file
-            traj.thermalized = true
-        catch 
+        catch
             rm(file)
             return
         end
+
+        traj.trajectoryID     = f["trajectoryID"]
+        traj.state            = f["state"]
+        traj.observables      = f["observables"]
+        traj.current_timestep = f["current_timestep"]
+        # if file has been saved, state is already thermalized. Important to be able to continue computation from loaded file
+        traj.thermalized = true
+        # Outside the try: an observable of the wrong length is a format clash,
+        # not a corrupt file, and must surface rather than delete the data. Row 1
+        # of the loaded observables is the window start and is already written,
+        # so `time_evolve!` must not (and does not) re-record it.
+        check_observable_length(traj)
     end
 end
 

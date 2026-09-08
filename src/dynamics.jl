@@ -9,9 +9,23 @@ function run_trajectory!(traj::Trajectory)
 end
 
 function time_evolve!(traj::Trajectory)
+    # `load_existing_trajectory_data!` force-sets `thermalized = true` on a
+    # resumed trajectory, so `fresh` is false exactly when thermalization, the
+    # kick and row 1 already happened in an earlier process and must not repeat.
+    fresh = !traj.thermalized
+
     thermalize!(traj)
+
+    # Row 1 is the window start: the state right after thermalization and the
+    # one-shot kick, before any time step is taken. For `kick = :randomPauli`
+    # this is W(t₀⁺); for `kick = :none` it is the pre-kick baseline at the
+    # matching instant.
+    fresh && get_observables!(traj, 0)
+
     for timestep in traj.current_timestep:traj.circuit.meas_steps*traj.circuit.meas_every
         time_step!(traj)
+        # `current_timestep` counts the steps taken once time_step! has run, so
+        # this fills row `current_timestep ÷ meas_every + 1`.
         get_observables!(traj)
         traj.current_timestep += 1
         save_trajectory(traj)
@@ -32,11 +46,12 @@ function thermalize!(traj::Trajectory)
 
     # One-shot disturbance, applied right after thermalization has reached the
     # protocol's stationary state and before the recorded window opens, so every
-    # recorded row is post-kick. Guarded by the
+    # recorded row — row 1 of the window included — is post-kick. Guarded by the
     # early return above: `load_existing_trajectory_data!` force-sets
     # `thermalized = true` when it resumes a saved trajectory, so a resumed run
     # never kicks twice. With thermalizationSteps == 0 the loop is empty but the
-    # kick still fires.
+    # kick still fires (`get_trajectories_from_circuit` starts every trajectory
+    # unthermalized for exactly that reason).
     apply_kick!(traj)
 
     traj.thermalized = true

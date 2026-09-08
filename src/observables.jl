@@ -1,9 +1,20 @@
-function get_observables!(traj::Trajectory)
-    if traj.current_timestep % traj.circuit.meas_every != 0
+"""
+    get_observables!(traj, steps_done = traj.current_timestep)
+
+Record every step-indexed observable of `traj` into the row that belongs to
+`steps_done` raw time steps.
+
+`steps_done == 0` is the *window start* — the state right after thermalization
+and the one-shot kick, before any time step is taken — and it lands in row 1.
+The state after `k` measurement steps therefore lands in row `k + 1`, which is
+why `get_observables` allocates `meas_steps + 1` rows.
+"""
+function get_observables!(traj::Trajectory, steps_done::Int = traj.current_timestep)
+    if steps_done % traj.circuit.meas_every != 0
         return traj
     end
 
-    current_meas_step = traj.current_timestep ÷ traj.circuit.meas_every
+    current_meas_step = steps_done ÷ traj.circuit.meas_every + 1
 
     for obs in traj.circuit.observables
         obs == :OP && (traj.observables.total_proj[current_meas_step, :] .= total_projector(traj))
@@ -14,7 +25,7 @@ function get_observables!(traj::Trajectory)
         obs == :OPQ && (traj.observables.total_proj_quarter[current_meas_step, :] .= projector_stats_r(traj, div(traj.circuit.L,4)))
         obs == :W && (traj.observables.witness[current_meas_step] = total_witness(traj))
 
-        if obs == :EEfin && traj.current_timestep == traj.circuit.meas_steps*traj.circuit.meas_every
+        if obs == :EEfin && steps_done == traj.circuit.meas_steps*traj.circuit.meas_every
             # Calculate the entanglement entropy for the final state
             for lmax in 1:div(traj.circuit.L,2)
                 A = 1:lmax
@@ -27,19 +38,78 @@ function get_observables!(traj::Trajectory)
     return
 end
 
+"""
+    n_recorded_rows(circuit) -> Int
+
+Rows carried by every step-indexed observable: `meas_steps + 1`. Row 1 is the
+window start (the state right after thermalization and the one-shot kick), rows
+`2 … meas_steps + 1` are the states after `1 … meas_steps` measurement steps.
+
+⚠️ Output written before v3.1 has `meas_steps` rows, one fewer, and its row `k`
+is the state after `k` steps rather than after `k − 1`. The two must never be
+averaged together; `check_observable_length` refuses to resume an old-length
+trajectory into a new-length run.
+"""
+n_recorded_rows(circuit::Circuit) = circuit.meas_steps + 1
+
+# Step-indexed observables and the `Observables` field each one fills. `:EEfin`
+# is deliberately absent: it shares `entanglement_entropy` with `:EE` but is
+# sized `div(L,2)`, so it carries no step index.
+const STEP_INDEXED_OBSERVABLES = ((:OP,  :total_proj),
+                                  (:EE,  :entanglement_entropy),
+                                  (:M,   :magnetization),
+                                  (:MX,  :magnetizationX),
+                                  (:OPH, :total_proj_half),
+                                  (:OPQ, :total_proj_quarter),
+                                  (:W,   :witness))
+
 function get_observables(circuit::Circuit)::Observables
     observables = Observables()
+    nrows = n_recorded_rows(circuit)
     for obs in circuit.observables
-        obs == :OP && (observables.total_proj = zeros(circuit.meas_steps, 3))
-        obs == :EE && (observables.entanglement_entropy = zeros(circuit.meas_steps))
-        obs == :M && (observables.magnetization = zeros(circuit.meas_steps, 2))
-        obs == :MX && (observables.magnetizationX = zeros(circuit.meas_steps, 2))
+        obs == :OP && (observables.total_proj = zeros(nrows, 3))
+        obs == :EE && (observables.entanglement_entropy = zeros(nrows))
+        obs == :M && (observables.magnetization = zeros(nrows, 2))
+        obs == :MX && (observables.magnetizationX = zeros(nrows, 2))
         obs == :EEfin && (observables.entanglement_entropy = zeros(div(circuit.L,2)))
-        obs == :OPH && (observables.total_proj_half = zeros(circuit.meas_steps,3))
-        obs == :OPQ && (observables.total_proj_quarter = zeros(circuit.meas_steps,3))
-        obs == :W && (observables.witness = zeros(circuit.meas_steps))
+        obs == :OPH && (observables.total_proj_half = zeros(nrows,3))
+        obs == :OPQ && (observables.total_proj_quarter = zeros(nrows,3))
+        obs == :W && (observables.witness = zeros(nrows))
     end
     return observables
+end
+
+"""
+    check_observable_length(traj)
+
+Refuse to mix the two observable layouts. Since v3.1 a step-indexed observable
+carries `meas_steps + 1` rows because row 1 holds the window start; a trajectory
+written earlier carries exactly `meas_steps` rows whose row `k` is the state
+after `k` steps. Resuming or averaging such a file inside a new-length run would
+silently shift every row by one step, so raise instead.
+
+Called by `load_existing_trajectory_data!` on everything read back from disk.
+"""
+function check_observable_length(traj::Trajectory)
+    ismissing(traj.observables) && return traj
+    expected = n_recorded_rows(traj.circuit)
+    for (obs, field) in STEP_INDEXED_OBSERVABLES
+        obs in traj.circuit.observables || continue
+        # `:EEfin` overwrites entanglement_entropy with a div(L,2)-long vector
+        obs === :EE && :EEfin in traj.circuit.observables && continue
+        data = getfield(traj.observables, field)
+        ismissing(data) && continue
+        rows = size(data, 1)
+        rows == expected && continue
+        error("check_observable_length: trajectory $(traj.trajectoryID) in " *
+              "\"$(traj.circuit.result_folder)\" has $rows rows in $field but this run " *
+              "expects $expected (= meas_steps + 1). A file with meas_steps rows was " *
+              "written before v3.1, when row 1 was the state after one step rather than " *
+              "the window start; its rows are shifted by one step against the new " *
+              "layout. Re-run the circuit into a fresh result_folder instead of mixing " *
+              "the two.")
+    end
+    return traj
 end
 
 """
